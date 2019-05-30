@@ -11,6 +11,7 @@ The Get-RecipientPermissions.ps1 is a PowerShell script that will report on perm
 ## LINKS
 
 [Exchange Hybrid Deployment Considerations](https://technet.microsoft.com/library/jj200581(v=exchg.150).aspx)
+
 [Invalid Permissions Impact to Bad Item Count](https://blogs.technet.microsoft.com/exchange/2017/05/30/toomanybaditemspermanentexception-error-when-migrating-to-exchange-online/)  
 
 ## Important points to note
