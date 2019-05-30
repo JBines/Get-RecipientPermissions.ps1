@@ -19,7 +19,8 @@ The Get-RecipientPermissions.ps1 is a PowerShell script that will report on perm
 ### Function Grant-PermissionRemoval
 
 This Function acts as a broker for when a PERMISSION (ie. Mailbox Folder, Send-As, Full Mailbox Permission etc) should be removed. Input data is presented from the Find-User Function and passes through a Decisions Matrix as to whether the object is should be removed for not. Function responds with a Boolean value if $True Removal Granted, if $False Removal Denied.  
-    
+
+PERMISSION Removal is only completed when the script is run with the switch -PerformRemoval 
     
 Account Type  |  Status | Default Decision | Notes
 --- | --- | --- | --- 
