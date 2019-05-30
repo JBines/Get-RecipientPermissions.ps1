@@ -556,7 +556,7 @@ Begin{
      Begin {
      
      #Set Function Variables - Change here if different results are required
-     $removeDeletedUser? = $False
+     $removeDeletedUser? = $True
      $removeDisabledUserNoMailbox? = $False     
      $removeUserNoMailbox? = $False
      $removeGroupNoEmail? = $False
