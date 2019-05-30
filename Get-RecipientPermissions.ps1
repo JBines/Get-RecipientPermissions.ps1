@@ -121,7 +121,7 @@ Exchange Hybrid Deployment Considerations - https://technet.microsoft.com/librar
 .NOTES
 Large environments will take a significant amount of time to scan (hours/days). You can reduce the run time by running the script in batches or multiple instances
 
-Important: Do not run too many instances or against too many mailboxes at once. Doing so could cause performance issues, affecting users. The Author or Contributors are not responsible for any such performance issues or improper use, or a lack of planning and testing.
+Important: Do not run too many instances or against too many mailboxes at once. Doing so could cause performance issues, affecting users. The Author or Contributors are not responsible for any such performance issues or improper use, or a lack of planning and testing. Script is provided AS-IS.
 
 [AUTHOR]
  Joshua Bines, Consultant
