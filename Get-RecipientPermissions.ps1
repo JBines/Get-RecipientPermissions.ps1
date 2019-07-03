@@ -21,7 +21,7 @@ Get-RecipientPermissions.ps1 [-Identity <string[Username]> or <Array[Get-Recipie
  
  Search-SendOnBehalfPermission [-Identity <Array[Get-Recipient]> or <Array[Get-Recipient]>]
  
- Search-MailboxForwarding [-Identity <Array[Get-Recipient]> or <Array[Get-Recipient]>]
+ Search-RecipientForwarding [-Identity <Array[Get-Recipient]> or <Array[Get-Recipient]>]
 
 .PARAMETER Identity
 The Identity parameter specifies the mailbox that you want to view. You can also enter a user's samaccount name or alias. Bulk request can be completed by first creating a variable and piping this variable into the script  
@@ -121,7 +121,7 @@ Exchange Hybrid Deployment Considerations - https://technet.microsoft.com/librar
 .NOTES
 Large environments will take a significant amount of time to scan (hours/days). You can reduce the run time by running the script in batches or multiple instances
 
-Important: Do not run too many instances or against too many mailboxes at once. Doing so could cause performance issues, affecting users. The Author or Contributors are not responsible for any such performance issues or improper use, or a lack of planning and testing. Script is provided AS-IS.
+Important: Do not run too many instances or against too many mailboxes at once. Doing so could cause performance issues, affecting users. The Author or Contributors are not responsible for issues or improper use, or a lack of planning and testing.
 
 [AUTHOR]
  Joshua Bines, Consultant
@@ -153,17 +153,13 @@ Find me on:
  0.1.0 20180607 - JBINES - Added Function Search-MailboxFolderPermission, Search-PublicFolderPermission
  0.1.1 20180611 - JBINES - Updated Help information. Enabled piping to Export-CSV. Amened Console output. Allowed strings to be used for Search FUNCTIONS
  0.1.2 20180612 - JBINES - Added Function Search-MailboxForwarding
- 0.1.3 20180625 - JBINES - BUG FIX: Errors calling Search-MailboxForwarding without -PerformRemoval added Switch which has no action in the function
-                         - BUG FIX: Found Issues with Distribution Groups with Full Access and Send-As and Receive-As Permission
-                         - Add grant removal approval for DL's and groups. 
- 0.1.4 20180626 - JBINES - BUG FIX: Grant-PermissionRemoval not  working for Linked mailboxes in some user cases. Change Logic and fixed Typo. 
- 0.1.5 20180631 - JBINES - BUG FIX: All Groups & Public Folders missing Receive-As Functions
- 1.0.0 20180703 - JBINES - Testing completed.  
+ 0.1.3 20190207 - JBINES - BUG FIX:CommonParameters for some exchange CMDlets are not working correctly instead we have had to change the global VAR $ErrorActionPreference
+                         - BUG FIX:Skip Audit Folders in mailboxes "Non-system logon cannot access Audits folder."
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
  HIGH - Exchange ActiveSync clients 
- MED - Write Log for troubleshooting (Use Verbose for now)
+ MED - Write Log for troubleshooting (Use Verbose for now with Transcript)
  MED - Expand DLs for with a full user list
  LOW - Feature to Target Exchange and AD Servers By Name
  LOW - SID Check via Resource Forest with Service Account and Pass
@@ -175,7 +171,7 @@ Find me on:
 [CmdletBinding(SupportsShouldProcess=$True)]
 Param 
 (
-	[Parameter(Position=0, Mandatory = $True, ValueFromPipeline = $True, HelpMessage="Please provide the Alias name of the Recipient you would like to check?")]
+	[Parameter(Position=0, Mandatory = $True, ValueFromPipeline = $True, HelpMessage="Please provide the Samaccount name of the User you would like to check?")]
     [ValidateNotNullOrEmpty()]
     $Identity,
     [Parameter(Mandatory = $False)]
@@ -194,6 +190,19 @@ Begin{
 
     #Start Script Timing StopWatch
     $TotalScriptStopWatch = [system.diagnostics.stopwatch]::startNew()
+    
+    #BUG FIX - Changes Global Action Preference in Find-User if the not set to STOP
+    $ErrorActionPreferenceChanged = $False
+
+    if($ErrorActionPreference -ne "STOP"){
+        
+            $ErrorActionPreferenceChanged = $ErrorActionPreference
+            Write-Verbose "Set Global Variable ErrorActionPreferenceChanged: $ErrorActionPreferenceChanged"
+            $ErrorActionPreference = "STOP"
+            If($?){Write-Verbose "FUNCTION Find-User: Changed $ErrorActionPreference to Stop"}
+
+    }
+
     
     #If Switch $EnableTranscript used start Console logging via Start-Transcript CMDlet
     
@@ -385,32 +394,6 @@ Begin{
                         Catch{
                             Write-Verbose "FUNCTION Find-User Failed Get-User $($_.Exception.Message)"
                             $userStatus += 'Get-User-Failed; '
-                            #$userStatus += $_.Exception.Message
-                                                                                
-                        }
-                    
-                        #Check for Disabled Groups
-                        Try{
-                            If($userIsValid -eq $null){
-                            
-                                $userObj = Get-Group -Identity $User.ToString() -ErrorAction STOP
-                                
-                                If($userObj.DistinguishedName){
-
-                                        #Set Var for Array
-                                        $userDisplayName = $userObj.DisplayName
-                                        $userSamAccountName = $userObj.SamAccountName
-                                        $userRecipientTypeDetails = $userObj.RecipientType
-                                        $userDistinguishedName = $userObj.DistinguishedName
-                                        $userIsValid = $True
-                                        $userStatus += 'Get-Group-Succeeded;'
-                                }
-                            } 
-                        }
-                        
-                        Catch{
-                            Write-Verbose "FUNCTION Find-User Failed Get-Group $($_.Exception.Message)"
-                            $userStatus += 'Get-Group-Failed; '
                             $userStatus += $_.Exception.Message
                             
                             #Set Var for Array
@@ -421,8 +404,6 @@ Begin{
                             $userEnabled = $False
                                                     
                         }
-                    
-                    
                     
                     }
                     
@@ -531,8 +512,7 @@ Begin{
     #Account Type#       #Status#                        #Default Decision#     #Notes#
      Deleted Object       No Object Found                  DELETE                Only a SID is found by a regex match. Exchange is unable to resolve the SID to a Name. 
      User NO Mailbox      Enabled or Disabled              LEAVE                 User Object at one time had a mailbox and a permission was applied to a Mailbox folder or but this mailbox has now been disconnected but the AD Object still exists. 
-     Group NO Email       Enabled or Disabled              LEAVE                 Group at one time was mail enabled and a permission for this group was applied. Since then the group 
-     ADObjectNotFound     Object Not found in AD           LEAVE                 Typically displayed because the user account has recently been removed from AD (+-15Min). This is also a fall back value for Find-User for when SID match Fails along with Get-Recipient Get-User and Get-Group. 
+     ADObjectNotFound     Object Not found in AD           LEAVE                 Typically displayed because the user account has recently been removed from AD (+-15Min). This is also a fall back value for Find-User for when SID match Fails along with Get-Recipient and Get-User. 
      Linked Mailbox       No Object Found in Remote Forest LEAVE                 Will delete misconfigured linked mailbox folder permissions. 
      Linked Mailbox       No Linked Master Account  SID    LEAVE                 Assumed account is misconfigured. 
      Normal Mailbox       Enabled or Disabled              LEAVE                 Default setting is not to delete any permission unless matches occur. 
@@ -557,10 +537,9 @@ Begin{
      
      #Set Function Variables - Change here if different results are required
      $removeDeletedUser? = $True
-     $removeDisabledUserNoMailbox? = $False     
-     $removeUserNoMailbox? = $False
-     $removeGroupNoEmail? = $False
-
+     $removeDisabledUserNoMailbox? = $False
+     
+         $removeUserNoMailbox? = $False 
          $removeLinkedMailboxAll? = $False
          $removeLinkedMailboxSuccessCrossForest? = $False
          $removeLinkedMailboxFailedCrossForest? = $False
@@ -595,15 +574,13 @@ Begin{
                                 }
                 "LinkedMailbox"{
                                 
-                                switch($Status,$removeLinkedMailboxAll?){
+                                If($Status -eq "LinkedMailbox-SuccessCrossForestResolution"){$Result = $removeLinkedMailboxSuccessCrossForest?}
+                                If($Status -eq "LinkedMailbox-MissingLinkedMasterAccount"){$Result = $removeLinkedMailboxMissingLinkedMasterAccount?}
+                                If($Status -eq "LinkedMailbox-SIDFailedCrossForestResolution"){$Result = $removeLinkedMailboxFailedCrossForest?}
+                                Else{$Result = $removeLinkedMailboxAll?}
                                 
-                                    {$Status -eq "LinkedMailbox-SuccessCrossForestResolution"} {$Result = $removeLinkedMailboxSuccessCrossForest?}
-                                    {$Status -eq "LinkedMailbox-MissingLinkedMasterAccountSID"}{$Result = $removeLinkedMailboxMissingLinkedMasterAccount?}
-                                    {$Status -eq "LinkedMailbox-SIDFailedCrossForestResolution"}{$Result = $removeLinkedMailboxFailedCrossForest?}                                
-                                    {$removeLinkedMailboxAll? -eq $True}{$Result = $removeLinkedMailboxAll?}
-                                
-                                }
-                                
+                                If($removeLinkedMailboxAll?){$Result = $removeLinkedMailboxAll?}
+                                                                    
                                 }
                 "ADObjectNotFound"{
                                 
@@ -615,11 +592,6 @@ Begin{
                                 
                                 } 
                 "DisabledUser"{
-                                
-                                $Result = $removeDisabledUserNoMailbox?
-                                
-                                }
-                "Group"{
                                 
                                 $Result = $removeDisabledUserNoMailbox?
                                 
@@ -751,7 +723,7 @@ Begin{
             if($FMP -ne $null){
                 foreach($FMPobj in $FMP){
                     
-                    Write-Verbose "FUNCTION Search-FullMailboxPermission: Found Full mailbox permisison for $($FMPobj.User.tostring()) on Source Recipient $($recipientObj.Name)"
+                    Write-Verbose "FUNCTION Search-FullMailboxPermission: Found Full mailbox permisison for $FMPobj.User on Source Recipient $($recipientObj.Name)"
                     
                     #Null Var
                     $FMPobj_USER = $Null
@@ -763,7 +735,7 @@ Begin{
                     
                     #Find User and Check for Orphanded SID or Object
                     
-                    $FMPobj_USER = Find-User $FMPobj.User.tostring()
+                    $FMPobj_USER = Find-User $FMPobj.User
                     
                     $FMPobj_DEL = Grant-PermissionRemoval -SamAccountName $FMPobj_USER.SamAccountName -RecipientType $FMPobj_USER.RecipientTypeDetails -Status $FMPobj_USER.Status
                                                                                 
@@ -1067,7 +1039,7 @@ $Identity,
         if($SENDAS -ne $null){
             foreach($SENDASobj in $SENDAS){
                 
-                Write-Verbose "FUNCTION Search-SendAsPermission: Found Send As permisison for $($SENDASobj.User.tostring()) on Source Recipient $($Identity.Name)"
+                Write-Verbose "FUNCTION Search-SendAsPermission: Found Send As permisison for $SENDASobj.User on Source Recipient $($Identity.Name)"
                 
                 #Null Var
                 $SENDASobj_USER = $Null
@@ -1076,7 +1048,7 @@ $Identity,
                 
                 #Find User and Check for Orphanded SID or Object
                 
-                $SENDASobj_USER = Find-User $SENDASobj.User.tostring()
+                $SENDASobj_USER = Find-User $SENDASobj.User
                 
                 $SENDASobj_DEL = Grant-PermissionRemoval -SamAccountName $SENDASobj_USER.SamAccountName -RecipientType $SENDASobj_USER.RecipientTypeDetails -Status $SENDASobj_USER.Status
                                                                             
@@ -1200,7 +1172,7 @@ $Identity,
         if($RECEIVEAS -ne $null){
             foreach($RECEIVEASobj in $RECEIVEAS){
                 
-                Write-Verbose "FUNCTION Search-ReceiveAsPermission: Found Send As permisison for $($RECEIVEASobj.User.tostring()) on Source Recipient $($Identity.Name)"
+                Write-Verbose "FUNCTION Search-ReceiveAsPermission: Found Send As permisison for $RECEIVEASobj.User on Source Recipient $($Identity.Name)"
                 
                 #Null Var
                 $RECEIVEASobj_USER = $Null
@@ -1209,7 +1181,7 @@ $Identity,
                 
                 #Find User and Check for Orphanded SID or Object
                 
-                $RECEIVEASobj_USER = Find-User $RECEIVEASobj.User.tostring()
+                $RECEIVEASobj_USER = Find-User $RECEIVEASobj.User
                 
                 $RECEIVEASobj_DEL = Grant-PermissionRemoval -SamAccountName $RECEIVEASobj_USER.SamAccountName -RecipientType $RECEIVEASobj_USER.RecipientTypeDetails -Status $RECEIVEASobj_USER.Status
                                                                             
@@ -1466,7 +1438,7 @@ $Identity,
 
     If($Identity -ne $null){
             
-            [string[]] $FolderPaths = Get-MailboxfolderStatistics "$($Identity.samaccountname)" | Where-Object{($_.FolderType -ne "RecoverableItemsRoot")-and($_.FolderType -ne "RecoverableItemsDeletions")-and($_.FolderType -ne "RecoverableItemsPurges")-and($_.Folderpath -ne "RecoverableItemsVersions")} | %{$MBXFOLArray += (New-Object psobject -Property @{FolderPath=$_.FolderPath; FolderId=$_.FolderId})}
+            [string[]] $FolderPaths = Get-MailboxfolderStatistics "$($Identity.samaccountname)" | Where-Object{($_.FolderType -ne "RecoverableItemsRoot")-and($_.FolderType -ne "RecoverableItemsDeletions")-and($_.FolderType -ne "RecoverableItemsPurges")-and($_.Folderpath -ne "RecoverableItemsVersions")-and($_.FolderType -ne "SyncIssues")-and($_.FolderType -ne "Conflicts")-and($_.FolderType -ne "ServerFailures")-and($_.FolderType -ne "LocalFailures")-and($_.FolderType -ne "WorkingSet")-and($_.FolderType -ne "Audits")-and($_.FolderType -ne "CalendarLogging")} | %{$MBXFOLArray += (New-Object psobject -Property @{FolderPath=$_.FolderPath; FolderId=$_.FolderId})}
             $MBXFolders = $MBXFOLArray
             foreach($MBXFoldersobj in $MBXFolders){
                     if($MBXFoldersobj -ne $null){
@@ -1733,10 +1705,8 @@ This Function searches for Recipient Forwarding Permissions and Reports. The Per
  Param (
  
 [Parameter(Mandatory = $True, ValueFromPipeline = $True)]
-$Identity,
-
-[Parameter(Mandatory = $False)]
-[switch]$PerformRemoval
+$Identity
+ 
  )
  
  Begin {
@@ -1966,8 +1936,8 @@ Process{
     $CMDlet_SENDAS = $null
     $CMDlet_RECEIVEAS=$null
     $CMDlet_PUBDEL=$null
+    $CMDlet_FORW= $null
     $CMDlet_MBXFOL=$null
-    $CMDlet_FORW=$null
     $CMDlet_PF=$null
     
     #Create Blank Array for the Mailbox Folders. Null for each piped user to stop false postives.
@@ -2027,20 +1997,16 @@ Process{
                             $CMDlet_RECEIVEAS=$True}
             'MailNonUniversalGroup' {
                             $CMDlet_SOBP = $True
-                            $CMDlet_SENDAS = $True
-                            $CMDlet_RECEIVEAS=$True}
+                            $CMDlet_SENDAS = $True}
             'MailUniversalDistributionGroup' {
                             $CMDlet_SOBP = $True
-                            $CMDlet_SENDAS = $True
-                            $CMDlet_RECEIVEAS=$True}
+                            $CMDlet_SENDAS = $True}
             'MailUniversalSecurityGroup' {
                             $CMDlet_SOBP = $True
-                            $CMDlet_SENDAS = $True
-                            $CMDlet_RECEIVEAS=$True}
+                            $CMDlet_SENDAS = $True}
             'PublicFolder' {
                             $CMDlet_SOBP = $True
                             $CMDlet_SENDAS = $True
-                            $CMDlet_RECEIVEAS=$True
                             $CMDlet_FORW= $True
                             $CMDlet_PF = $True}
             Default{Write-Error "The Object Recipient Type of $($recipientObj.RecipientTypeDetails) is not accepted"; Write-Verbose "The Recipient Type of $RecipientType does not meet the requirements to proceed"; Break}
@@ -2059,7 +2025,7 @@ Process{
             }
             Catch{
             
-                Write-Error "Error after calling function Search-FullMailboxPermission. Error: $($_.Exception.Message)"
+                Write-Error "Failed to call function Search-FullMailboxPermission"
             
             }
             Finally{
@@ -2090,7 +2056,7 @@ Process{
             }
             Catch{
             
-                Write-Error "Error after calling function Search-SendOnBehalfPermission. Error: $($_.Exception.Message)"
+                Write-Error "Failed to call function Search-SendOnBehalfPermission"
             
             }
             Finally{
@@ -2152,7 +2118,7 @@ Process{
             }
             Catch{
             
-                Write-Error "Error after calling function Search-ReceiveAsPermission. Error: $($_.Exception.Message)"
+                Write-Error "Failed to call function Search-ReceiveAsPermission"
             
             }
             Finally{
@@ -2183,7 +2149,7 @@ Process{
             }
             Catch{
             
-                Write-Error "Error after calling function Search-ReceiveAsPermission. Error: $($_.Exception.Message)"
+                Write-Error "Failed to call function Search-ReceiveAsPermission"
             
             }
             Finally{
@@ -2245,7 +2211,7 @@ Process{
             }
             Catch{
             
-                Write-Error "Error after calling function Search-MailboxFolderPermission. Error: $($_.Exception.Message)"
+                Write-Error "Failed to call function Search-MailboxFolderPermission"
             
             }
             Finally{
@@ -2276,7 +2242,6 @@ Process{
             Catch{
             
                 Write-Error "Failed to call function Search-RecipientForwarding"
-                Write-Error "$($_.Exception.Message)"
             
             }
             Finally{
@@ -2352,6 +2317,16 @@ Process{
             Stop-Transcript
             
     }
+
+#Reapply Default ErrorActionPreference Value
+
+if($ErrorActionPreferenceChanged -ne $False){
+
+            $ErrorActionPreference = $ErrorActionPreferenceChanged
+            If($?){Write-Verbose "END: Revert $ErrorActionPreference Back To: $ErrorActionPreferenceChanged"}
+
+}
+
 
 #Stop Script Stopwatch and Report
     $TotalScriptStopWatch.Stop() 
