@@ -279,7 +279,7 @@ Begin{
                     }
                 }
                             
-                Catch [System.Security.Principal.IdentityNotMappedException]{ 
+                Catch{ 
                                 
                     Write-Verbose "Object SID $SIDobj Matched by REGEX and Failed Local AD Lookup";
                         $SIDArray += (New-Object psobject -Property @{
@@ -289,12 +289,6 @@ Begin{
                         })
                 }
                             
-                Catch{
-                            
-                    Write-Error "Object SID Lookup failed with Unknown Error $_.Exception.Message";
-                            
-                }
-        
     }
     
     END {$SIDArray}
@@ -837,7 +831,7 @@ Begin{
             }
             Catch{
                         
-                Write-Error "The Get-Recipient CMDlet returned a error and is unable to continue"; EXIT
+                Write-Error "The Get-Recipient CMDlet returned a error and is unable to continue: Error: $($_.Exception.Message)"; EXIT
                 
             }
             
@@ -1828,6 +1822,7 @@ END {$FORWARDreport}
      
     #Add Exchange 2010 snapin if not already loaded in the PowerShell session
 
+    <#
     Write-Verbose 'Checking Exchange Snapin is loaded'
     if (!(Get-PSSnapin | Where-Object {$_.Name -eq "Microsoft.Exchange.Management.PowerShell.E2010"}))
     {
@@ -1847,6 +1842,8 @@ END {$FORWARDreport}
         Connect-ExchangeServer -auto -AllowClobber
     }
     Else {Write-Verbose "Exchange Snapin is already loaded!"}
+
+    #>
 
     #Test and Data Validation $Identity Input
     Write-Verbose "Testing Local User $($env:UserName) RBAC Permission"    
