@@ -153,8 +153,9 @@ Find me on:
  0.1.0 20180607 - JBINES - Added Function Search-MailboxFolderPermission, Search-PublicFolderPermission
  0.1.1 20180611 - JBINES - Updated Help information. Enabled piping to Export-CSV. Amened Console output. Allowed strings to be used for Search FUNCTIONS
  0.1.2 20180612 - JBINES - Added Function Search-MailboxForwarding
- 0.1.3 20190207 - JBINES - BUG FIX:CommonParameters for some exchange CMDlets are not working correctly instead we have had to change the global VAR $ErrorActionPreference
+ 0.1.3 20190702 - JBINES - BUG FIX:CommonParameters for some exchange CMDlets are not working correctly instead we have had to change the global VAR $ErrorActionPreference
                          - BUG FIX:Skip Audit Folders in mailboxes "Non-system logon cannot access Audits folder."
+ 0.1.3 20190711 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow mailboxes to break loop.
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
@@ -696,7 +697,7 @@ Begin{
             
             if (($Identity | Measure-Object).count -gt 1){
             
-                Write-Error "The Get-Recipient CMDlet returned more than one result after running the Get-Recipient CMDlet. Please use another switch for completing bulk actions";$Identity_STR_Error; EXIT
+                Write-Error "The Get-Recipient CMDlet returned more than one result after running the Get-Recipient CMDlet. Please use another switch for completing bulk actions";$Identity_STR_Error; Break
             
             }
             Else {Write-Verbose "FUNCTION Search-FullMailboxPermission: Recipient found"}
@@ -1432,7 +1433,17 @@ $Identity,
 
     If($Identity -ne $null){
             
-            [string[]] $FolderPaths = Get-MailboxfolderStatistics "$($Identity.samaccountname)" | Where-Object{($_.FolderType -ne "RecoverableItemsRoot")-and($_.FolderType -ne "RecoverableItemsDeletions")-and($_.FolderType -ne "RecoverableItemsPurges")-and($_.Folderpath -ne "RecoverableItemsVersions")-and($_.FolderType -ne "SyncIssues")-and($_.FolderType -ne "Conflicts")-and($_.FolderType -ne "ServerFailures")-and($_.FolderType -ne "LocalFailures")-and($_.FolderType -ne "WorkingSet")-and($_.FolderType -ne "Audits")-and($_.FolderType -ne "CalendarLogging")} | %{$MBXFOLArray += (New-Object psobject -Property @{FolderPath=$_.FolderPath; FolderId=$_.FolderId})}
+            Try{
+                
+                [string[]] $FolderPaths = Get-MailboxfolderStatistics "$($Identity.DistinguishedName)" | Where-Object{($_.FolderType -ne "RecoverableItemsRoot")-and($_.FolderType -ne "RecoverableItemsDeletions")-and($_.FolderType -ne "RecoverableItemsPurges")-and($_.Folderpath -ne "RecoverableItemsVersions")-and($_.FolderType -ne "SyncIssues")-and($_.FolderType -ne "Conflicts")-and($_.FolderType -ne "ServerFailures")-and($_.FolderType -ne "LocalFailures")-and($_.FolderType -ne "WorkingSet")-and($_.FolderType -ne "Audits")-and($_.FolderType -ne "CalendarLogging")} | %{$MBXFOLArray += (New-Object psobject -Property @{FolderPath=$_.FolderPath; FolderId=$_.FolderId})}
+            
+            }
+            catch{
+            
+                Write-Error "The Get-MailboxFolderStatistics CMDlet Returned an Error: $($_.Exception.Message)"
+                Break
+            }
+
             $MBXFolders = $MBXFOLArray
             foreach($MBXFoldersobj in $MBXFolders){
                     if($MBXFoldersobj -ne $null){
