@@ -155,7 +155,7 @@ Find me on:
  0.1.2 20180612 - JBINES - Added Function Search-MailboxForwarding
  0.1.3 20190702 - JBINES - BUG FIX:CommonParameters for some exchange CMDlets are not working correctly instead we have had to change the global VAR $ErrorActionPreference
                          - BUG FIX:Skip Audit Folders in mailboxes "Non-system logon cannot access Audits folder."
- 0.1.3 20190711 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow mailboxes to break loop.
+ 0.1.3 20190715 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow a loop break on mailboxes in dismounted DBs. Also move to distinguishedName where Mailnick and SamAccountName do not match.
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
@@ -1453,8 +1453,8 @@ $Identity,
                     $MBXFoldersobj_Path = $null       
                     
                     #Add SamAccountName: for the Get-MailboxFolderPermission                   
-                    $MBXFoldersobj_ID = "$($Identity.samaccountname)" + ":" + $MBXFoldersobj.FolderId
-                    $MBXFoldersobj_Path = "$($Identity.samaccountname)" + ":" + $MBXFoldersobj.FolderPath
+                    $MBXFoldersobj_ID = "$($Identity.DistinguishedName)" + ":" + $MBXFoldersobj.FolderId
+                    $MBXFoldersobj_Path = "$($Identity.DistinguishedName)" + ":" + $MBXFoldersobj.FolderPath
 
                     $MBXFOLPERM = Get-MailboxFolderPermission "$($MBXFoldersobj_ID)" 
                         foreach($MBXFOLPERMobj in $MBXFOLPERM){
