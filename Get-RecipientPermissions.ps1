@@ -155,7 +155,7 @@ Find me on:
  0.1.2 20180612 - JBINES - Added Function Search-MailboxForwarding
  0.1.3 20190702 - JBINES - BUG FIX:CommonParameters for some exchange CMDlets are not working correctly instead we have had to change the global VAR $ErrorActionPreference
                          - BUG FIX:Skip Audit Folders in mailboxes "Non-system logon cannot access Audits folder."
- 0.1.4 20190715 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow a loop break on mailboxes in dismounted DBs.  Also move to Guid where Mailnick and SamAccountName do not match and other dodgy objects.
+ 0.1.4 20190715 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow a loop break on mailboxes in dismounted DBs. Also move to Guid where Mailnick and SamAccountName do not match and other dodgy objects. 
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
@@ -194,15 +194,6 @@ Begin{
     
     #BUG FIX - Changes Global Action Preference in Find-User if the not set to STOP
     $ErrorActionPreferenceChanged = $False
-
-    if($ErrorActionPreference -ne "STOP"){
-        
-            $ErrorActionPreferenceChanged = $ErrorActionPreference
-            Write-Verbose "Set Global Variable ErrorActionPreferenceChanged: $ErrorActionPreferenceChanged"
-            $ErrorActionPreference = "STOP"
-            If($?){Write-Verbose "FUNCTION Find-User: Changed $ErrorActionPreference to Stop"}
-
-    }
 
     
     #If Switch $EnableTranscript used start Console logging via Start-Transcript CMDlet
@@ -312,7 +303,19 @@ Begin{
      [CmdletBinding()]
      Param ([Parameter(Mandatory = $True, ValueFromPipeline = $False)]$User)
      
-     Begin {$userArray = @()}
+     Begin {$userArray = @()
+     
+        if($ErrorActionPreference -ne "STOP"){
+        
+            $ErrorActionPreferenceChanged = $ErrorActionPreference
+            Write-Verbose "Set Global Variable ErrorActionPreferenceChanged: $ErrorActionPreferenceChanged"
+            Set-Variable -Name ErrorActionPreference -Value "STOP" -Scope Global
+            If($?){Write-Verbose "FUNCTION Find-User: Changed $ErrorActionPreference to Stop"}
+
+        }
+
+
+     }
         
      Process{
             
@@ -486,7 +489,22 @@ Begin{
             
     }
     
-    END {$UserArray}
+    END {
+    
+        $UserArray
+    
+        #Reapply Default ErrorActionPreference Value
+
+        if($ErrorActionPreferenceChanged -ne $False){
+            
+            Set-Variable -Name ErrorActionPreference -Value $ErrorActionPreferenceChanged -Scope Global
+            #$ErrorActionPreference = $ErrorActionPreferenceChanged
+            If($?){Write-Verbose "Function Find-User: Revert $ErrorActionPreference Back To: $ErrorActionPreferenceChanged"}
+
+        }
+
+
+    }
 
     } #end function Find-User
     
@@ -2325,15 +2343,6 @@ Process{
             Stop-Transcript
             
     }
-
-#Reapply Default ErrorActionPreference Value
-
-if($ErrorActionPreferenceChanged -ne $False){
-
-            $ErrorActionPreference = $ErrorActionPreferenceChanged
-            If($?){Write-Verbose "END: Revert $ErrorActionPreference Back To: $ErrorActionPreferenceChanged"}
-
-}
 
 
 #Stop Script Stopwatch and Report
