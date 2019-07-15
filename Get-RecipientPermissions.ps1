@@ -155,7 +155,7 @@ Find me on:
  0.1.2 20180612 - JBINES - Added Function Search-MailboxForwarding
  0.1.3 20190702 - JBINES - BUG FIX:CommonParameters for some exchange CMDlets are not working correctly instead we have had to change the global VAR $ErrorActionPreference
                          - BUG FIX:Skip Audit Folders in mailboxes "Non-system logon cannot access Audits folder."
- 0.1.3 20190715 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow a loop break on mailboxes in dismounted DBs. Also move to distinguishedName where Mailnick and SamAccountName do not match.
+ 0.1.4 20190715 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow a loop break on mailboxes in dismounted DBs. Also move to distinguishedName where Mailnick and SamAccountName do not match.
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
