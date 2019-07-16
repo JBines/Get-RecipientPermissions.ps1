@@ -156,6 +156,8 @@ Find me on:
  0.1.3 20190702 - JBINES - BUG FIX:CommonParameters for some exchange CMDlets are not working correctly instead we have had to change the global VAR $ErrorActionPreference
                          - BUG FIX:Skip Audit Folders in mailboxes "Non-system logon cannot access Audits folder."
  0.1.4 20190715 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow a loop break on mailboxes in dismounted DBs. Also move to Guid where Mailnick and SamAccountName do not match and other dodgy objects. 
+ 0.1.5 20190716 - JBINES - Added Suport for Exchange 2013 for Search-PublicFolderPermission. Still need to test Excahnge 2016 and 2019 but I belive it should work. 
+
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
@@ -307,7 +309,9 @@ Begin{
      
         if($ErrorActionPreference -ne "STOP"){
         
-            $ErrorActionPreferenceChanged = $ErrorActionPreference
+            #$ErrorActionPreferenceChanged = $ErrorActionPreference
+            Set-Variable -Name ErrorActionPreferenceChanged -Value $ErrorActionPreference -Scope Global
+
             Write-Verbose "Set Global Variable ErrorActionPreferenceChanged: $ErrorActionPreferenceChanged"
             Set-Variable -Name ErrorActionPreference -Value "STOP" -Scope Global
             If($?){Write-Verbose "FUNCTION Find-User: Changed $ErrorActionPreference to Stop"}
@@ -535,7 +539,7 @@ Begin{
      [CmdletBinding()]
      Param (
      
-    [Parameter(Mandatory = $True)]
+    [Parameter(Mandatory = $False)]
     [System.String]$SamAccountName,
     
     [Parameter(Mandatory = $True)]
@@ -1448,6 +1452,8 @@ $Identity,
 
      #Create Blank Array for the Mailbox Folders. Null for each piped user to stop false postives.
      $MBXFOLArray = @();
+     $MBXFoldersobj_PERMID = $Null
+
 
     If($Identity -ne $null){
             
@@ -1481,35 +1487,53 @@ $Identity,
                                 $MBXFoldersobj_USER = $Null
                                 $MBXFoldersobj_DEL = $Null
                                 $MBXFoldersobj_Action = 'Report Only'
-                                $MBXFOLPERMobj_ID_NAME = $MBXFOLPERMobj.identity.displayname
+
+                                #Switch for Exchange 2010 vs 2013\2016 
+                                if(-not($MBXFoldersobj_PERMID)){
+
+                                    Switch ($MBXFOLPERMobj)
+                                    {
+                                        {$MBXFOLPERMobj.Identity.usertype -like "*"} { $MBXFoldersobj_PERMID = 'Identity'}
+                                        {$MBXFOLPERMobj.User.usertype -like "*"} { $MBXFoldersobj_PERMID = 'User' }
+                                        Default{Write-Error "Unable to determine Exchange Version. Could not match either '$MBXFOLPERMobj.Identity.usertype' or $MBXFOLPERMobj.User.usertype.", Break}
+                                    }
+                                    Write-Verbose "FUNCTION Search-MailboxFolderPermission: MBXFoldersobj_PERMID set to $MBXFoldersobj_PERMID"
+                                
+                                }#End If
+
+                                #Declare Variables
+                                $MBXFOLPERMobj_ID_NAME = $MBXFOLPERMobj.$MBXFoldersobj_PERMID.displayname
 
                                 #Ammended Objects Selected
-                                if(($MBXFOLPERMobj.identity.displayname -ne $recipientObj.Name) -and (($MBXFOLPERMobj.Identity.usertype -eq "Internal") -or ($MBXFOLPERMobj.Identity.usertype -eq "Unknown"))-and(($MBXFOLPERMobj.identity.displayname -ne 'Default')-or($MBXFOLPERMobj.identity.displayname -ne 'Anonymous'))){
+                                #if(($MBXFOLPERMobj.identity.displayname -ne $recipientObj.Name) -and (($MBXFOLPERMobj.Identity.usertype -eq "Internal") -or ($MBXFOLPERMobj.Identity.usertype -eq "Unknown"))-and(($MBXFOLPERMobj.identity.displayname -ne 'Default')-or($MBXFOLPERMobj.identity.displayname -ne 'Anonymous'))){
                                 
-                                    switch($MBXFOLPERMobj.Identity.usertype){
+                                #Added support for 2013\2016
+                                if(($MBXFOLPERMobj.$MBXFoldersobj_PERMID.displayname -ne $recipientObj.Name) -and (($MBXFOLPERMobj.$MBXFoldersobj_PERMID.usertype -eq "Internal") -or ($MBXFOLPERMobj.$MBXFoldersobj_PERMID.usertype -eq "Unknown"))-and(($MBXFOLPERMobj.$MBXFoldersobj_PERMID.displayname -ne 'Default')-or($MBXFOLPERMobj.$MBXFoldersobj_PERMID.UserType -ne 'Default')-or($MBXFOLPERMobj.$MBXFoldersobj_PERMID.displayname -ne 'Anonymous')-or($MBXFOLPERMobj.$MBXFoldersobj_PERMID.UserType -ne 'Anonymous'))){
+
+                                    switch($MBXFOLPERMobj.$MBXFoldersobj_PERMID.usertype){
                                         'Internal' {
                                                                                                                                                                     
                                                             #Find User and Check for Orphanded SID or Object
-                                                            $MBXFOLPERMobj_USER = Find-User $MBXFOLPERMobj.identity.displayname
+                                                            $MBXFOLPERMobj_USER = Find-User $MBXFOLPERMobj.$MBXFoldersobj_PERMID.displayname
                                                             
                                                             $MBXFOLPERMobj_DEL = Grant-PermissionRemoval -SamAccountName $MBXFOLPERMobj_USER.SamAccountName -RecipientType $MBXFOLPERMobj_USER.RecipientTypeDetails -Status $MBXFOLPERMobj_USER.Status
                                                             
-                                                            Write-Verbose "FUNCTION Search-MBXFoldersPermission: Found Mailbox Folder permisison for $($MBXFOLPERMobj.User) on Source Recipient $($recipientObj.Name)"
+                                                            Write-Verbose "FUNCTION Search-MBXFolderPermission: Found Mailbox Folder permisison for $($MBXFOLPERMobj.User) on Source Recipient $($recipientObj.Name)"
                                                             $MBXFoldersreport = $MBXFoldersreport + (New-ArrayObject -RecipientDisplayName $MBXFOLPERMobj_USER.DisplayName -RecipientSamAcc $MBXFOLPERMobj_USER.SamAccountName -RecipientType $MBXFOLPERMobj_USER.RecipientTypeDetails -PermissionType "$($MBXFOLPERMobj.AccessRights) on Exchange Mailbox Folder $($MBXFoldersobj_Path)" -SourceDisplayName $Identity.Name -SourceSamAcc $Identity.SamAccountName -SourceRecipientType $Identity.RecipientTypeDetails -Action $MBXFoldersobj_Action -Removal $MBXFOLPERMobj_DEL)                    
                                                     
                                                     }
                                         'Unknown'  {
                                                                                                                                                                                         
                                                         #Find User and Check for Orphanded SID or Object
-                                                        $MBXFOLPERMobj_USER = Find-User ($MBXFOLPERMobj.identity.displayname -replace "NT User:")
+                                                        $MBXFOLPERMobj_USER = Find-User ($MBXFOLPERMobj.$MBXFoldersobj_PERMID.displayname -replace "NT User:")
                                                         
                                                         $MBXFOLPERMobj_DEL = Grant-PermissionRemoval -SamAccountName $MBXFOLPERMobj_USER.SamAccountName -RecipientType $MBXFOLPERMobj_USER.RecipientTypeDetails -Status $MBXFOLPERMobj_USER.Status
                                                             
-                                                        Write-Verbose "FUNCTION Search-MBXFoldersPermission: Found Mailbox Folder permisison for $($MBXFOLPERMobj.User) on Source Recipient $($recipientObj.Name)"
+                                                        Write-Verbose "FUNCTION Search-MailboxFolderPermission: Found Mailbox Folder permisison for $($MBXFOLPERMobj.User) on Source Recipient $($recipientObj.Name)"
 
                                                         if(($PerformRemoval) -and ($MBXFOLPERMobj_DEL)) {
                                                                 
-                                                                    If($PSCmdlet.ShouldProcess($MBXFoldersobj_PATH,"Removing mailbox folder permission for user $($MBXFOLPERMobj.identity.displayname)")){
+                                                                    If($PSCmdlet.ShouldProcess($MBXFoldersobj_PATH,"Removing mailbox folder permission for user $($MBXFOLPERMobj.$MBXFoldersobj_PERMID.displayname)")){
                                                                                                             
                                                                         Try{
                                                                             
@@ -1517,17 +1541,17 @@ $Identity,
                                                                             If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){
                                                                             
                                                                                 #Remove-ADPermission -Identity $Identity.DistinguishedName -User $MBXFoldersobj_USER.SamAccountName -ExtendedRights "Send As" -Confirm:$False
-                                                                                Remove-MailboxFolderPermission $MBXFoldersobj_ID -User $MBXFOLPERMobj.identity.displayname -Confirm:$false
+                                                                                Remove-MailboxFolderPermission $MBXFoldersobj_ID -User $MBXFOLPERMobj.$MBXFoldersobj_PERMID.displayname -Confirm:$false
                                                                             }
                                                                             Else{
                                                                             
                                                                                 #Remove-ADPermission -Identity $Identity.DistinguishedName -User $MBXFoldersobj_USER.DistinguishedName -ExtendedRights "Send As"
-                                                                                Remove-MailboxFolderPermission $MBXFoldersobj_ID -User $MBXFOLPERMobj.identity.displayname #-Confirm:$false
+                                                                                Remove-MailboxFolderPermission $MBXFoldersobj_ID -User $MBXFOLPERMobj.$MBXFoldersobj_PERMID.displayname #-Confirm:$false
                                                                             }
                                                                             
                                                                             If(($?)-and(-not $PSBoundParameters.ContainsKey('WhatIf'))){
                                                                             
-                                                                                Write-Verbose "FUNCTION Search-MBXFoldersPermission Successful CMDlet: Remove-AdPermission  $($Identity.DisplayName) -User $($MBXFoldersobj_USER.SamAccountName)"
+                                                                                Write-Verbose "FUNCTION Search-MailboxFolderPermission Successful CMDlet: Remove-AdPermission  $($Identity.DisplayName) -User $($MBXFoldersobj_USER.SamAccountName)"
                                                                                 $MBXFoldersobj_Action = "Successful Removal"
                                                                             
                                                                             }
@@ -1536,7 +1560,7 @@ $Identity,
                                                                         
                                                                         Catch{
                                                                             
-                                                                            Write-Verbose "FUNCTION Search-MBXFoldersPermission Failure CMDlet: Remove-ADPermission $_.Exception.Message";
+                                                                            Write-Verbose "FUNCTION Search-MailboxFolderPermission Failure CMDlet: Remove-ADPermission $_.Exception.Message";
                                                                             Write-Error "$_.Exception.Message"
                                                                             $MBXFoldersobj_Action = "Failed Removal"
                                                                         
@@ -1546,7 +1570,7 @@ $Identity,
                                                                     
                                                             If(($WhatIfPreference -eq $True) -and ($MBXFoldersobj_Action -ne 'Removal Failed')){
                                                             
-                                                            Write-Verbose "FUNCTION Search-MBXFoldersPermission What If Successful CMDlet: Remove-ADPermission $($Identity.DisplayName) -User $($MBXFoldersobj_USER.SamAccountName)"
+                                                            Write-Verbose "FUNCTION Search-MailboxFolderPermission What If Successful CMDlet: Remove-ADPermission $($Identity.DisplayName) -User $($MBXFoldersobj_USER.SamAccountName)"
                                                             $MBXFoldersobj_Action = "Successful WhatIf"
                                                             
                                                             }
@@ -1638,9 +1662,26 @@ $Identity,
     
  Process{
  
-        $PF = Get-MailPublicFolder $Identity.DistinguishedName | Get-PublicFolder
+        Try{
+            $PF = Get-MailPublicFolder $Identity.DistinguishedName | ForEach-Object{Get-PublicFolder $_.EntryId}
+        }
+        Catch{
+            $PF = Get-MailPublicFolder $Identity.DistinguishedName | Get-PublicFolder
+        }
+
+        #Check for Exchange 2013. 
+        If($PF.EntryId){
+
+            $PFCP = Get-PublicFolderClientPermission $PF.EntryId | where {($($_.User.UserType) -eq  "Internal")-xor ($_.user.UserType -eq "Unknown")}
+        
+        }
+        #Support for Exchange 2010
+        Else{
+            
+            $PFCP = $PF | Get-PublicFolderClientPermission | where {($_.user.IsDefault -eq $false) -and ($_.user.IsAnonymous -eq $false)}
+        }
+
         #$PF = Get-mailPublicFolder $recipientObj.alais | Get-PublicFolder
-        $PFCP = $PF | Get-PublicFolderClientPermission | where {($_.user.IsDefault -eq $false) -and ($_.user.IsAnonymous -eq $false)}
             
             if($PFCP -ne $null){
                 foreach($PFCPobj in $PFCP){
@@ -1664,18 +1705,39 @@ $Identity,
                                         #Add Support for the -Confirm:$False Switch
                                         If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){
                                         
-                                            Remove-PublicFolderClientPermission -Identity $PF.MapiIdentity.tostring() -User $PFCPobj.User -AccessRights $PFCPobj.AccessRights -Confirm:$False
+
+                                            #Check for Exchange 2013. 
+                                            If($PF.EntryId){
+
+                                                Remove-PublicFolderClientPermission -Identity $PF.EntryId -User $PFCPobj.User -Confirm:$False
+        
+                                            }
+                                            #Support for Exchange 2010
+                                            Else{
+                                                Remove-PublicFolderClientPermission -Identity $PF.MapiIdentity.tostring() -User $PFCPobj.User -AccessRights $PFCPobj.AccessRights -Confirm:$False
+                                            }
                                             
                                         }
                                         Else{
                                         
-                                            Remove-PublicFolderClientPermission -Identity $PF.MapiIdentity.tostring() -User $PFCPobj.User -AccessRights $PFCPobj.AccessRights
+                                            #Check for Exchange 2013. 
+                                            If($PF.EntryId){
+
+                                                Remove-PublicFolderClientPermission -Identity $PF.EntryId -User $PFCPobj.User
+
+        
+                                            }
+                                            #Support for Exchange 2010
+                                            Else{
+                                                Remove-PublicFolderClientPermission -Identity $PF.MapiIdentity.tostring() -User $PFCPobj.User -AccessRights $PFCPobj.AccessRights
+                                            }
+
                                             
                                         }
                                         
                                         If(($?)-and(-not $PSBoundParameters.ContainsKey('WhatIf'))){
                                         
-                                            Write-Verbose "FUNCTION Search-PublicDelegatesPermission Successful CMDlet: Remove-AdPermission  $($Identity.DisplayName) -User $($PFCPobj_USER.SamAccountName)"
+                                            Write-Verbose "FUNCTION Search-PublicFolderPermission Successful CMDlet: Remove-AdPermission  $($Identity.DisplayName) -User $($PFCPobj_USER.SamAccountName)"
                                             $PFCPobj_Action = "Successful Removal"
                                         
                                         }
