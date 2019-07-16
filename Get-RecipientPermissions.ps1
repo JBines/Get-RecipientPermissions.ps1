@@ -1661,13 +1661,8 @@ $Identity,
  }
     
  Process{
- 
-        Try{
-            $PF = Get-MailPublicFolder $Identity.DistinguishedName | ForEach-Object{Get-PublicFolder $_.EntryId}
-        }
-        Catch{
-            $PF = Get-MailPublicFolder $Identity.DistinguishedName | Get-PublicFolder
-        }
+
+        $PF = Get-MailPublicFolder $Identity.DistinguishedName | ForEach-Object{If($PF.EntryId){Get-PublicFolder $_.EntryId}}
 
         #Check for Exchange 2013. 
         If($PF.EntryId){
@@ -1677,7 +1672,7 @@ $Identity,
         }
         #Support for Exchange 2010
         Else{
-            
+            $PF = Get-MailPublicFolder $Identity.DistinguishedName | Get-PublicFolder
             $PFCP = $PF | Get-PublicFolderClientPermission | where {($_.user.IsDefault -eq $false) -and ($_.user.IsAnonymous -eq $false)}
         }
 
