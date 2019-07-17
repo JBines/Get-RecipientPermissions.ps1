@@ -157,11 +157,12 @@ Find me on:
                          - BUG FIX:Skip Audit Folders in mailboxes "Non-system logon cannot access Audits folder."
  0.1.4 20190715 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow a loop break on mailboxes in dismounted DBs. Also move to Guid where Mailnick and SamAccountName do not match and other dodgy objects. 
  0.1.5 20190716 - JBINES - Added Suport for Exchange 2013 for Search-PublicFolderPermission. Still need to test Excahnge 2016 and 2019 but I belive it should work. 
-
+                         - BUG FIX:When get-recepient returns an array higher than 1. Added Select-Object -First 1"
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
  HIGH - Exchange ActiveSync clients 
+ MED - Flag duplicates from the Find-User
  MED - Write Log for troubleshooting (Use Verbose for now with Transcript)
  MED - Expand DLs for with a full user list
  LOW - Feature to Target Exchange and AD Servers By Name
@@ -306,7 +307,8 @@ Begin{
      Param ([Parameter(Mandatory = $True, ValueFromPipeline = $False)]$User)
      
      Begin {$userArray = @()
-     
+            
+        
         if($ErrorActionPreference -ne "STOP"){
         
             #$ErrorActionPreferenceChanged = $ErrorActionPreference
@@ -317,7 +319,6 @@ Begin{
             If($?){Write-Verbose "FUNCTION Find-User: Changed $ErrorActionPreference to Stop"}
 
         }
-
 
      }
         
@@ -340,8 +341,10 @@ Begin{
                 
                 
                 Try{
-                
-                    $userObj = Get-Recipient $User -ErrorAction STOP
+                    
+                    #In the the event of duplicates take the first of the array (Look at Flaging this in the report!)
+                    $userObj = Get-Recipient $User -ErrorAction STOP | Select-Object -First 1                    
+
                     If($userObj.DistinguishedName){
                             #Set Var for Array
                             $userDisplayName = $userObj.DisplayName
@@ -378,7 +381,7 @@ Begin{
                         #Check for Disabled and Disconnected Mailboxes
                         Try{
 
-                            $userObj = Get-User -Identity $User.ToString() -ErrorAction STOP
+                            $userObj = Get-User -Identity $User.ToString() -ErrorAction STOP | Select-Object -First 1 
                             
                             If($userObj.DistinguishedName){
 
@@ -490,7 +493,10 @@ Begin{
                     
                 }
             }
-            
+            else{
+                
+               Write-Verbose "Function Find-User: Null or More that 1 object found Skipping lookup"
+            }
     }
     
     END {
@@ -708,7 +714,7 @@ Begin{
     
             Try{
             
-                $Identity = Get-Recipient $Identity -ErrorAction STOP
+                $Identity = Get-Recipient $Identity -ErrorAction STOP | Select-Object -First 1 
             
             }
             Catch{
@@ -849,7 +855,7 @@ Begin{
     
             Try{
             
-                $Identity = Get-Recipient $Identity -ErrorAction STOP
+                $Identity = Get-Recipient $Identity -ErrorAction STOP | Select-Object -First 1 
             
             }
             Catch{
@@ -1027,7 +1033,7 @@ $Identity,
     
             Try{
             
-                $Identity = Get-Recipient $Identity -ErrorAction STOP
+                $Identity = Get-Recipient $Identity -ErrorAction STOP | Select-Object -First 1 
             
             }
             Catch{
@@ -1160,7 +1166,7 @@ $Identity,
     
             Try{
             
-                $Identity = Get-Recipient $Identity -ErrorAction STOP
+                $Identity = Get-Recipient $Identity -ErrorAction STOP | Select-Object -First 1 
             
             }
             Catch{
@@ -1292,7 +1298,7 @@ $Identity,
     
             Try{
             
-                $Identity = Get-Recipient $Identity -ErrorAction STOP
+                $Identity = Get-Recipient $Identity -ErrorAction STOP | Select-Object -First 1 
             
             }
             Catch{
@@ -1426,7 +1432,7 @@ $Identity,
     
             Try{
             
-                $Identity = Get-Recipient $Identity -ErrorAction STOP
+                $Identity = Get-Recipient $Identity -ErrorAction STOP | Select-Object -First 1 
             
             }
             Catch{
@@ -1639,7 +1645,7 @@ $Identity,
     
             Try{
             
-                $Identity = Get-Recipient $Identity -ErrorAction STOP
+                $Identity = Get-Recipient $Identity -ErrorAction STOP | Select-Object -First 1 
             
             }
             Catch{
@@ -1661,19 +1667,30 @@ $Identity,
  }
     
  Process{
-
-        $PF = Get-MailPublicFolder $Identity.DistinguishedName | ForEach-Object{If($PF.EntryId){Get-PublicFolder $_.EntryId}}
+        $PF =$Null
+        $PF = Get-MailPublicFolder $Identity.DistinguishedName | ForEach-Object{If($_.EntryId){Get-PublicFolder $_.EntryId}}
 
         #Check for Exchange 2013. 
         If($PF.EntryId){
-
-            $PFCP = Get-PublicFolderClientPermission $PF.EntryId | where {($($_.User.UserType) -eq  "Internal")-xor ($_.user.UserType -eq "Unknown")}
-        
+            Try{
+                $PFCP = Get-PublicFolderClientPermission $PF.EntryId | where {($($_.User.UserType) -eq  "Internal")-xor ($_.user.UserType -eq "Unknown")}
+            }
+            Catch{
+                Write-Verbose "FUNCTION Search-PublicFolderPermission Failure CMDlet: Get-MailPublicFolder$($_.Exception.Message)";
+                #Write-Error "$_.Exception.Message"
+            }
         }
         #Support for Exchange 2010
         Else{
-            $PF = Get-MailPublicFolder $Identity.DistinguishedName | Get-PublicFolder
-            $PFCP = $PF | Get-PublicFolderClientPermission | where {($_.user.IsDefault -eq $false) -and ($_.user.IsAnonymous -eq $false)}
+            
+            Try{
+                $PF = Get-MailPublicFolder $Identity.DistinguishedName | Get-PublicFolder
+                $PFCP = $PF | Get-PublicFolderClientPermission | where {($_.user.IsDefault -eq $false) -and ($_.user.IsAnonymous -eq $false)}
+            }
+            Catch{
+                Write-Verbose "FUNCTION Search-PublicFolderPermission Failure CMDlet: Get-MailPublicFolder$($_.Exception.Message)";
+                #Write-Error "$_.Exception.Message"
+            }
         }
 
         #$PF = Get-mailPublicFolder $recipientObj.alais | Get-PublicFolder
@@ -1741,7 +1758,7 @@ $Identity,
                                     
                                     Catch{
                                         
-                                        Write-Verbose "FUNCTION Search-PublicDelegatesPermission Failure CMDlet: Remove-ADPermission $_.Exception.Message";
+                                        Write-Verbose "FUNCTION Search-PublicFolderPermission Failure CMDlet: Remove-ADPermission $($_.Exception.Message)";
                                         Write-Error "$_.Exception.Message"
                                         $PFCPobj_Action = "Failed Removal"
                                     
@@ -1751,7 +1768,7 @@ $Identity,
                                 
                         If(($WhatIfPreference -eq $True) -and ($PFCPobj_Action -ne 'Removal Failed')){
                         
-                        Write-Verbose "FUNCTION Search-PublicDelegatesPermission What If Successful CMDlet: Remove-ADPermission $($Identity.DisplayName) -User $($PFCPobj_USER.SamAccountName)"
+                        Write-Verbose "FUNCTION Search-PublicFolderPermission What If Successful CMDlet: Remove-ADPermission $($Identity.DisplayName) -User $($PFCPobj_USER.SamAccountName)"
                         $PFCPobj_Action = "Successful WhatIf"
                         
                         }
@@ -1800,7 +1817,7 @@ if((($Identity.GetType()).name) -eq 'String'){
     
     Try{
     
-        $Identity = Get-Recipient $Identity -ErrorAction STOP
+        $Identity = Get-Recipient $Identity -ErrorAction STOP | Select-Object -First 1 
     
     }
     Catch{
@@ -1978,7 +1995,7 @@ END {$FORWARDreport}
             
             Try{
             
-                $Identity = Get-Recipient $Identity -ErrorAction STOP
+                $Identity = Get-Recipient $Identity -ErrorAction STOP | Select-Object -First 1 
             
             }
             Catch{
@@ -2294,7 +2311,7 @@ Process{
             }
             Catch{
             
-                Write-Error "Failed to call function Search-MailboxFolderPermission"
+                Write-Error "Failed to call function Search-PublicFolderPermission"
             
             }
             Finally{
@@ -2407,4 +2424,4 @@ Process{
     Write-Host "Script Completed in $($TotalScriptstopwatch.Elapsed.TotalMinutes) Minutes"
     
  }
-    
+ 
