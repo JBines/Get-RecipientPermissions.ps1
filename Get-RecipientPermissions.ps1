@@ -114,6 +114,15 @@ $AllUsers | Search-MailboxFolderPermission | Export-Csv -Path E:\Scripts\Exports
 
 In this example, the mandatory parameters have been provided and the ACTION(s) -Identity have been populated. These results are exported to the Export-CSV CMDlet. 
 
+.EXAMPLE
+$AllPublicFolders = Get-PublicFolder -Recurse
+
+$AllPublicFolders | Search-PublicFolderPermission | Export-Csv PF_Export.csv
+
+-- CREATE CSV REPORT OF ONLY PUBLIC FOLDER PERMISSIONS FOR BULK RECIPIENTS CAN BE NON MAIL ENABLED --
+
+In this example, the mandatory parameters have been provided and the ACTION(s) -Identity have been populated. These results are exported to the Export-CSV CMDlet. 
+
 .LINK
  
 Exchange Hybrid Deployment Considerations - https://technet.microsoft.com/library/jj200581(v=exchg.150).aspx
@@ -158,6 +167,7 @@ Find me on:
  0.1.4 20190715 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow a loop break on mailboxes in dismounted DBs. Also move to Guid where Mailnick and SamAccountName do not match and other dodgy objects. 
  0.1.5 20190716 - JBINES - Added Suport for Exchange 2013 for Search-PublicFolderPermission. Still need to test Excahnge 2016 and 2019 but I belive it should work. 
                          - BUG FIX:When get-recepient returns an array higher than 1. Added Select-Object -First 1"
+ 0.1.6 20190722 - JBINES - Added Suport for non mail Enabled Search-PublicFolderPermissions. 
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
@@ -1668,24 +1678,30 @@ $Identity,
     
  Process{
         $PF =$Null
-        $PF = Get-MailPublicFolder $Identity.DistinguishedName | ForEach-Object{If($_.EntryId){Get-PublicFolder $_.EntryId}}
+        #Check for get-PublicFolder input from the pipeline
+        If($Identity.EntryId){$PF = Get-PublicFolder $Identity.EntryId -ErrorAction Continue }
+        Else{
+            $PF = Get-MailPublicFolder $Identity.DistinguishedName | ForEach-Object{If($_.EntryId){Get-PublicFolder $_.EntryId}}
+            #Exchange 2010 Work Around
+            if(-not $PF){$PF = Get-MailPublicFolder $Identity.DistinguishedName | Get-PublicFolder}
+        }
 
-        #Check for Exchange 2013. 
-        If($PF.EntryId){
+        #Support for Exchange 2010
+        If($PF.MapiIdentity){
             Try{
-                $PFCP = Get-PublicFolderClientPermission $PF.EntryId | where {($($_.User.UserType) -eq  "Internal")-xor ($_.user.UserType -eq "Unknown")}
+                #$PF = Get-MailPublicFolder $Identity.DistinguishedName | Get-PublicFolder
+                $PFCP = $PF | Get-PublicFolderClientPermission | where {($_.user.IsDefault -eq $false) -and ($_.user.IsAnonymous -eq $false)}
             }
             Catch{
-                Write-Verbose "FUNCTION Search-PublicFolderPermission Failure CMDlet: Get-MailPublicFolder$($_.Exception.Message)";
+                Write-Verbose "FUNCTION Search-PublicFolderPermission Failure CMDlet: Get-MailPublicFolder $($_.Exception.Message)";
                 #Write-Error "$_.Exception.Message"
             }
         }
-        #Support for Exchange 2010
+
+        #Check for Exchange 2013. 
         Else{
-            
             Try{
-                $PF = Get-MailPublicFolder $Identity.DistinguishedName | Get-PublicFolder
-                $PFCP = $PF | Get-PublicFolderClientPermission | where {($_.user.IsDefault -eq $false) -and ($_.user.IsAnonymous -eq $false)}
+                $PFCP = Get-PublicFolderClientPermission $PF.EntryId | where {($($_.User.UserType) -eq  "Internal")-xor ($_.user.UserType -eq "Unknown")}
             }
             Catch{
                 Write-Verbose "FUNCTION Search-PublicFolderPermission Failure CMDlet: Get-MailPublicFolder$($_.Exception.Message)";
@@ -2424,4 +2440,4 @@ Process{
     Write-Host "Script Completed in $($TotalScriptstopwatch.Elapsed.TotalMinutes) Minutes"
     
  }
- 
+    
