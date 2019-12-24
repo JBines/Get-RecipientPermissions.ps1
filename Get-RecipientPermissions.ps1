@@ -92,7 +92,7 @@ $AllUsers | .\Get-RecipientPermissions.ps1 -PerformRemoval -ExportCSV -Verbose -
 In this example, the mandatory parameters have been provided and the ACTION(s) -PerformRemoval, -ExportCSV, -Verbose and -Confirm have been enabled. This enables a high level of logging to the console. The seach results will include any orphaned user permissions and will remove any of the permissions set in the Grant-PermissionRemoval Function.   
 
 .EXAMPLE
-Get-UserMailPermissions.ps1 -Identity Bines -ExportCSV -ExportXML -ExportPath 'E:\Scripts\Exports' -Verbose 
+Get-RecipientPermissions.ps1 -Identity Bines -ExportCSV -ExportXML -ExportPath 'E:\Scripts\Exports' -Verbose 
 
 -- CREATE CSV & XML REPORT OF A SINGLE MAILBOX WITH EXPORT PATH --
 
@@ -168,6 +168,7 @@ Find me on:
  0.1.5 20190716 - JBINES - Added Suport for Exchange 2013 for Search-PublicFolderPermission. Still need to test Excahnge 2016 and 2019 but I belive it should work. 
                          - BUG FIX:When get-recepient returns an array higher than 1. Added Select-Object -First 1"
  0.1.6 20190722 - JBINES - Added Suport for non mail Enabled Search-PublicFolderPermissions. 
+ 0.1.6 20191224 - JBINES - Added New Recipient_SamAccountname to Function New-ArrayObject 
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
@@ -679,12 +680,14 @@ Begin{
      
                     New-Object psobject -Property @{
                         'Recipient' = $RecipientDisplayName;
-                        'Recipient SamAccountName' = $RecipientSamAcc;
-                        'Recipient Type' = $RecipientType;
-                        'Permission Type' = $PermissionType;
-                        'Source Recipient' = "$SourceDisplayName ($SourceSamAcc) ($SourceRecipientType)";
-                        'Script Action' = $Action;                        
-                        'Perform Removal' = $Removal;                        
+                        'RecipientSamAccountName' = $RecipientSamAcc;
+                        'RecipientType' = $RecipientType;
+                        'PermissionType' = $PermissionType;
+                        'SourceRecipient' = "$SourceDisplayName ($SourceSamAcc) ($SourceRecipientType)";
+                        'SourceRecipientSamAccountName' = $SourceSamAcc;
+                        'SourceRecipientType' = $SourceRecipientType
+                        'ScriptAction' = $Action;                        
+                        'PerformRemoval' = $Removal;                        
                     }
     
     } #end function New-ArrayObject
@@ -751,18 +754,15 @@ Begin{
         
      Process{
      
-     $FMP = Get-MailboxPermission -Identity $Identity.DistinguishedName | where {$_.user.tostring() -ne "NT AUTHORITY\SELF" -and $_.IsInherited -eq $false}
+     $FMP = Get-MailboxPermission -Identity $Identity.DistinguishedName | Where-Object {$_.user.tostring() -ne "NT AUTHORITY\SELF" -and $_.IsInherited -eq $false}
             
-            if($FMP -ne $null){
+            if($null -ne $FMP){
                 foreach($FMPobj in $FMP){
                     
                     Write-Verbose "FUNCTION Search-FullMailboxPermission: Found Full mailbox permisison for $FMPobj.User on Source Recipient $($recipientObj.Name)"
                     
                     #Null Var
                     $FMPobj_USER = $Null
-                    $FMPobj_Translate = $Null
-                    $FMPobj_USER_SAM = $Null
-                    $FMPobj_USER_NAME = $Null
                     $FMPobj_DEL = $Null
                     $FMPobj_Action = 'Report Only'
                     
@@ -843,7 +843,7 @@ Begin{
 
         #>
     {
-     [CmdletBinding(SupportsShouldProcess=$True,ConfirmImpact=’High’)]
+     [CmdletBinding(SupportsShouldProcess=$True,ConfirmImpact="High")]
      Param (
      
     [Parameter(Mandatory = $True, ValueFromPipeline = $True)]
@@ -884,7 +884,7 @@ Begin{
 
      #Create PS Array
      [PSObject[]] $SOBPreport = @()
-     $ScriptAction? = "Script Action"
+     #$ScriptAction? = "Script Action"
           
      }
         
@@ -912,7 +912,7 @@ Begin{
      
          If($CMDlet_Get){$SOBP =  Invoke-Expression $CMDlet_Get
          
-            if($SOBP -ne $null){
+            if($null -ne $SOBP){
 
                 $SOBPArray = [System.Collections.ArrayList]@()
             
@@ -1067,9 +1067,9 @@ $Identity,
     
  Process{
  
- $SENDAS = Get-ADPermission -Identity $Identity.DistinguishedName |  where {($_.ExtendedRights -like “*Send-As*”) -and -not ($_.User -like “NT AUTHORITY\SELF”)}
+ $SENDAS = Get-ADPermission -Identity $Identity.DistinguishedName |  Where-Object {($_.ExtendedRights -like "*Send-As*") -and -not ($_.User -like "NT AUTHORITY\SELF")}
         
-        if($SENDAS -ne $null){
+        if($null -ne $SENDAS){
             foreach($SENDASobj in $SENDAS){
                 
                 Write-Verbose "FUNCTION Search-SendAsPermission: Found Send As permisison for $SENDASobj.User on Source Recipient $($Identity.Name)"
@@ -1200,9 +1200,9 @@ $Identity,
     
  Process{
  
- $RECEIVEAS = Get-ADPermission -Identity $Identity.DistinguishedName |  where {($_.ExtendedRights -like “*Receive-As*”) -and -not ($_.User -like “NT AUTHORITY\SELF”)}
+ $RECEIVEAS = Get-ADPermission -Identity $Identity.DistinguishedName |  Where-Object {($_.ExtendedRights -like "*Receive-As*") -and -not ($_.User -like "NT AUTHORITY\SELF")}
         
-        if($RECEIVEAS -ne $null){
+        if($null -ne $RECEIVEAS){
             foreach($RECEIVEASobj in $RECEIVEAS){
                 
                 Write-Verbose "FUNCTION Search-ReceiveAsPermission: Found Send As permisison for $RECEIVEASobj.User on Source Recipient $($Identity.Name)"
@@ -1286,7 +1286,7 @@ Function Search-PublicDelegatesPermission
 This Function searches for Public Delegates Permissions, Reports, and removes permissions if the -PerformRemoval Switch is set. 
     #>
 {
- [CmdletBinding(SupportsShouldProcess=$True,ConfirmImpact=’High’)]
+ [CmdletBinding(SupportsShouldProcess=$True,ConfirmImpact="High")]
  Param (
  
 [Parameter(Mandatory = $True, ValueFromPipeline = $True)]
@@ -1333,7 +1333,7 @@ $Identity,
  
  $PUBDEL = (Get-ADUser -Identity $Identity.DistinguishedName -Properties publicDelegates).publicDelegates
  
-        if($PUBDEL -ne $null){
+        if($null -ne $PUBDEL){
             foreach($PUBDELobj in $PUBDEL){
                 
                 Write-Verbose "FUNCTION Search-PublicDelegatesPermission: Found Send As permisison for $PUBDELobj.User on Source Recipient $($Identity.Name)"
@@ -1471,7 +1471,7 @@ $Identity,
      $MBXFoldersobj_PERMID = $Null
 
 
-    If($Identity -ne $null){
+    If($null -ne $Identity){
             
             Try{
                 
@@ -1486,7 +1486,7 @@ $Identity,
 
             $MBXFolders = $MBXFOLArray
             foreach($MBXFoldersobj in $MBXFolders){
-                    if($MBXFoldersobj -ne $null){
+                    if($null -ne $MBXFoldersobj){
 
                     #Set Foreach Var to Null to Stop False Postives
                     $MBXFoldersobj_ID = $null
@@ -1501,7 +1501,7 @@ $Identity,
                                 
                                 #Null Var
                                 $MBXFoldersobj_USER = $Null
-                                $MBXFoldersobj_DEL = $Null
+                                #$MBXFoldersobj_DEL = $Null
                                 $MBXFoldersobj_Action = 'Report Only'
 
                                 #Switch for Exchange 2010 vs 2013\2016 
@@ -1518,7 +1518,7 @@ $Identity,
                                 }#End If
 
                                 #Declare Variables
-                                $MBXFOLPERMobj_ID_NAME = $MBXFOLPERMobj.$MBXFoldersobj_PERMID.displayname
+                                #$MBXFOLPERMobj_ID_NAME = $MBXFOLPERMobj.$MBXFoldersobj_PERMID.displayname
 
                                 #Ammended Objects Selected
                                 #if(($MBXFOLPERMobj.identity.displayname -ne $recipientObj.Name) -and (($MBXFOLPERMobj.Identity.usertype -eq "Internal") -or ($MBXFOLPERMobj.Identity.usertype -eq "Unknown"))-and(($MBXFOLPERMobj.identity.displayname -ne 'Default')-or($MBXFOLPERMobj.identity.displayname -ne 'Anonymous'))){
@@ -1633,7 +1633,7 @@ This Function searches for Public Folder Permissions, Reports, and removes permi
 . Important! check for Administrators who have created Public Folders without mailboxes. These listed owners maybe removed depending on the variables set in the Grant-PermissionRemoval Function
 #>
 {
- [CmdletBinding(SupportsShouldProcess=$True,ConfirmImpact=’High’)]
+ [CmdletBinding(SupportsShouldProcess=$True,ConfirmImpact="High")]
  Param (
  
 [Parameter(Mandatory = $True, ValueFromPipeline = $True)]
@@ -1690,7 +1690,7 @@ $Identity,
         If($PF.MapiIdentity){
             Try{
                 #$PF = Get-MailPublicFolder $Identity.DistinguishedName | Get-PublicFolder
-                $PFCP = $PF | Get-PublicFolderClientPermission | where {($_.user.IsDefault -eq $false) -and ($_.user.IsAnonymous -eq $false)}
+                $PFCP = $PF | Get-PublicFolderClientPermission | Where-Object {($_.user.IsDefault -eq $false) -and ($_.user.IsAnonymous -eq $false)}
             }
             Catch{
                 Write-Verbose "FUNCTION Search-PublicFolderPermission Failure CMDlet: Get-MailPublicFolder $($_.Exception.Message)";
@@ -1701,7 +1701,7 @@ $Identity,
         #Check for Exchange 2013. 
         Else{
             Try{
-                $PFCP = Get-PublicFolderClientPermission $PF.EntryId | where {($($_.User.UserType) -eq  "Internal")-xor ($_.user.UserType -eq "Unknown")}
+                $PFCP = Get-PublicFolderClientPermission $PF.EntryId | Where-Object {($($_.User.UserType) -eq  "Internal")-xor ($_.user.UserType -eq "Unknown")}
             }
             Catch{
                 Write-Verbose "FUNCTION Search-PublicFolderPermission Failure CMDlet: Get-MailPublicFolder$($_.Exception.Message)";
@@ -1711,7 +1711,7 @@ $Identity,
 
         #$PF = Get-mailPublicFolder $recipientObj.alais | Get-PublicFolder
             
-            if($PFCP -ne $null){
+            if($null -ne $PFCP){
                 foreach($PFCPobj in $PFCP){
                     
                     #Null Var
@@ -1851,7 +1851,7 @@ if((($Identity.GetType()).name) -eq 'String'){
 }
  #Create PS Array
  [PSObject[]] $FORWARDreport = @()
- $ScriptAction? = "Script Action"
+ #$ScriptAction? = "Script Action"
       
  }
     
@@ -2003,7 +2003,7 @@ END {$FORWARDreport}
     }
     
     #Check for a string and attempt to resolve to a Recipient
-    if($Identity -ne $null){
+    if($null -ne $Identity){
         Write-Verbose "Check for a user data entered into the 'Identity' Switch"
         if((($Identity.GetType()).name) -eq 'String'){
             Write-Verbose "Confirmed User entered data of $Identity";
@@ -2148,7 +2148,7 @@ Process{
             
                 If($FMP){
                 
-                $FMP | Select 'Source Recipient','Permission Type',Recipient,'Script Action' #Limit Results to allow FT by default
+                $FMP | Select-Object 'SourceRecipient','PermissionType',Recipient,'ScriptAction' #Limit Results to allow FT by default
                 $report +=  $FMP
                 
                 }
@@ -2179,7 +2179,7 @@ Process{
             
                 If($SOBP){
                 
-                $SOBP | Select 'Source Recipient','Permission Type',Recipient,'Script Action' #Limit Results to allow FT by default
+                $SOBP | Select-Object 'SourceRecipient','PermissionType',Recipient,'ScriptAction' #Limit Results to allow FT by default
                 $report +=  $SOBP
                 
                 }
@@ -2210,7 +2210,7 @@ Process{
                 
                 If($SENDAS){
                 
-                $SENDAS | Select 'Source Recipient','Permission Type',Recipient,'Script Action' #Limit Results to allow FT by default
+                $SENDAS | Select 'SourceRecipient','PermissionType',Recipient,'ScriptAction' #Limit Results to allow FT by default
                 $report +=  $SENDAS
                 
                 }
@@ -2241,7 +2241,7 @@ Process{
             
                 If($RECEIVEAS){
                 
-                $RECEIVEAS | Select 'Source Recipient','Permission Type',Recipient,'Script Action' #Limit Results to allow FT by default
+                $RECEIVEAS | Select-Object 'SourceRecipient','PermissionType',Recipient,'ScriptAction' #Limit Results to allow FT by default
                 $report +=  $RECEIVEAS
                 
                 }
@@ -2272,7 +2272,7 @@ Process{
             
                 If($PUBDEL){
                 
-                $PUBDEL | Select 'Source Recipient','Permission Type',Recipient,'Script Action' #Limit Results to allow FT by default
+                $PUBDEL | Select-Object 'SourceRecipient','PermissionType',Recipient,'ScriptAction' #Limit Results to allow FT by default
                 $report +=  $PUBDEL
                 
                 }
@@ -2303,7 +2303,7 @@ Process{
             
                 If($MBXFOL){
                 
-                $MBXFOL | Select 'Source Recipient','Permission Type',Recipient,'Script Action' #Limit Results to allow FT by default
+                $MBXFOL | Select-Object 'SourceRecipient','PermissionType',Recipient,'ScriptAction' #Limit Results to allow FT by default
                 $report +=  $MBXFOL
                 
                 }
@@ -2334,7 +2334,7 @@ Process{
             
                 If($PF){
                 
-                $PF | Select 'Source Recipient','Permission Type',Recipient,'Script Action' #Limit Results to allow FT by default
+                $PF | Select-Object 'SourceRecipient','PermissionType',Recipient,'ScriptAction' #Limit Results to allow FT by default
                 $report +=  $PF
                 
                 }
@@ -2364,7 +2364,7 @@ Process{
             
                 If($FORW){
                 
-                $FORW | Select 'Source Recipient','Permission Type',Recipient,'Script Action' #Limit Results to allow FT by default
+                $FORW | Select-Object 'SourceRecipient','PermissionType',Recipient,'ScriptAction' #Limit Results to allow FT by default
                 $report +=  $FORW
                 
                 }
