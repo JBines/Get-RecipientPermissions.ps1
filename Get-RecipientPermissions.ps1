@@ -165,10 +165,11 @@ Find me on:
  0.1.3 20190702 - JBINES - BUG FIX:CommonParameters for some exchange CMDlets are not working correctly instead we have had to change the global VAR $ErrorActionPreference
                          - BUG FIX:Skip Audit Folders in mailboxes "Non-system logon cannot access Audits folder."
  0.1.4 20190715 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow a loop break on mailboxes in dismounted DBs. Also move to Guid where Mailnick and SamAccountName do not match and other dodgy objects. 
- 0.1.5 20190716 - JBINES - Added Suport for Exchange 2013 for Search-PublicFolderPermission. Still need to test Excahnge 2016 and 2019 but I belive it should work. 
-                         - BUG FIX:When get-recepient returns an array higher than 1. Added Select-Object -First 1"
+ 0.1.5 20190716 - JBINES - Added Suport for Modem Public Folders Exchange 2013/16/19 for Search-PublicFolderPermission. 
+                         - BUG FIX: When get-recepient returns an array higher than 1. Added Select-Object -First 1"
  0.1.6 20190722 - JBINES - Added Suport for non mail Enabled Search-PublicFolderPermissions. 
- 0.1.6 20191224 - JBINES - Added New Recipient_SamAccountname to Function New-ArrayObject 
+ 0.1.7 20191230 - JBINES - Added New Recipient_SamAccountname to Function New-ArrayObject. 
+                         - BUG FIX: Allowed script to continue on error for selected Functions. 
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
@@ -208,6 +209,7 @@ Begin{
     
     #BUG FIX - Changes Global Action Preference in Find-User if the not set to STOP
     $ErrorActionPreferenceChanged = $False
+    $oldActionPreference = $ErrorActionPreference
 
     
     #If Switch $EnableTranscript used start Console logging via Start-Transcript CMDlet
@@ -1473,15 +1475,15 @@ $Identity,
 
     If($null -ne $Identity){
             
-            Try{
-                
+            try{
+            
+                #Create Array 
                 [string[]] $FolderPaths = Get-MailboxfolderStatistics "$($Identity.Guid)" | Where-Object{($_.FolderType -ne "RecoverableItemsRoot")-and($_.FolderType -ne "RecoverableItemsDeletions")-and($_.FolderType -ne "RecoverableItemsPurges")-and($_.Folderpath -ne "RecoverableItemsVersions")-and($_.FolderType -ne "SyncIssues")-and($_.FolderType -ne "Conflicts")-and($_.FolderType -ne "ServerFailures")-and($_.FolderType -ne "LocalFailures")-and($_.FolderType -ne "WorkingSet")-and($_.FolderType -ne "Audits")-and($_.FolderType -ne "CalendarLogging")} | %{$MBXFOLArray += (New-Object psobject -Property @{FolderPath=$_.FolderPath; FolderId=$_.FolderId})}
             
             }
-            catch{
+            Catch{
             
                 Write-Error "The Get-MailboxFolderStatistics CMDlet Returned an Error: $($_.Exception.Message)"
-                Break
             }
 
             $MBXFolders = $MBXFOLArray
@@ -1511,7 +1513,7 @@ $Identity,
                                     {
                                         {$MBXFOLPERMobj.Identity.usertype -like "*"} { $MBXFoldersobj_PERMID = 'Identity'}
                                         {$MBXFOLPERMobj.User.usertype -like "*"} { $MBXFoldersobj_PERMID = 'User' }
-                                        Default{Write-Error "Unable to determine Exchange Version. Could not match either '$MBXFOLPERMobj.Identity.usertype' or $MBXFOLPERMobj.User.usertype.", Break}
+                                        Default{Write-Error "Unable to determine Exchange Version. Could not match either '$MBXFOLPERMobj.Identity.usertype' or $MBXFOLPERMobj.User.usertype."}#; Break}
                                     }
                                     Write-Verbose "FUNCTION Search-MailboxFolderPermission: MBXFoldersobj_PERMID set to $MBXFoldersobj_PERMID"
                                 
@@ -1868,7 +1870,7 @@ if((($Identity.GetType()).name) -eq 'String'){
             'EquipmentMailbox' {$CMDlet_Get= '(Get-mailbox -Identity $Identity.DistinguishedName)'}
             'LinkedMailbox' {$CMDlet_Get= '(Get-mailbox -Identity $Identity.DistinguishedName)'}
             'PublicFolder' {$CMDlet_Get= '(Get-MailPublicFolder -Identity $Identity.DistinguishedName)'}
-            Default{Write-Verbose "The Recipient Type of $($Identity.RecipientTypeDetails) does not meet the requirements to proceed"; break}
+            Default{Write-Verbose "The Recipient Type of $($Identity.RecipientTypeDetails) does not meet the requirements to proceed"}#; break}
     }
  
      If($CMDlet_Get){
@@ -2133,15 +2135,15 @@ Process{
             
             Try{
             
-                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$FMP = Search-FullMailboxPermission $recipientObj -PerformRemoval -Confirm:$False}
-                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$FMP = Search-FullMailboxPermission $recipientObj -PerformRemoval -WhatIf}
-                ElseIf($PerformRemoval){$FMP = Search-FullMailboxPermission $recipientObj -PerformRemoval}
-                Else{$FMP = Search-FullMailboxPermission $recipientObj}
+                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$FMP = Search-FullMailboxPermission $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
+                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$FMP = Search-FullMailboxPermission $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
+                ElseIf($PerformRemoval){$FMP = Search-FullMailboxPermission $recipientObj -PerformRemoval -ErrorAction Continue}
+                Else{$FMP = Search-FullMailboxPermission $recipientObj -ErrorAction Continue}
             
             }
             Catch{
             
-                Write-Error "Failed to call function Search-FullMailboxPermission"
+                Write-Error "Failed to call function Search-FullMailboxPermission: $_.Exception.Message"
             
             }
             Finally{
@@ -2164,15 +2166,15 @@ Process{
         
             Try{
             
-                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$SOBP = Search-SendOnBehalfPermission -Identity $recipientObj -PerformRemoval -Confirm:$False}
-                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$SOBP = Search-SendOnBehalfPermission -Identity $recipientObj -PerformRemoval -WhatIf}
-                ElseIf($PerformRemoval){$SOBP = Search-SendOnBehalfPermission -Identity $recipientObj -PerformRemoval}
-                Else{$SOBP = Search-SendOnBehalfPermission -Identity $recipientObj}
+                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$SOBP = Search-SendOnBehalfPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
+                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$SOBP = Search-SendOnBehalfPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
+                ElseIf($PerformRemoval){$SOBP = Search-SendOnBehalfPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
+                Else{$SOBP = Search-SendOnBehalfPermission -Identity $recipientObj -ErrorAction Continue}
             
             }
             Catch{
             
-                Write-Error "Failed to call function Search-SendOnBehalfPermission"
+                Write-Error "Failed to call function Search-SendOnBehalfPermission: $_.Exception.Message"
             
             }
             Finally{
@@ -2195,15 +2197,15 @@ Process{
                         
             Try{
             
-                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$SENDAS = Search-SendAsPermission -Identity $recipientObj -PerformRemoval -Confirm:$False}
-                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$SENDAS = Search-SendAsPermission -Identity $recipientObj -PerformRemoval -WhatIf}
-                ElseIf($PerformRemoval){$SENDAS = Search-SendAsPermission -Identity $recipientObj -PerformRemoval}
-                Else{$SENDAS = Search-SendAsPermission -Identity $recipientObj}
+                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$SENDAS = Search-SendAsPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
+                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$SENDAS = Search-SendAsPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
+                ElseIf($PerformRemoval){$SENDAS = Search-SendAsPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
+                Else{$SENDAS = Search-SendAsPermission -Identity $recipientObj -ErrorAction Continue}
             
             }
             Catch{
             
-                Write-Error "Failed to call function Search-SendOnBehalfPermission"
+                Write-Error "Failed to call function Search-SendOnBehalfPermission: $_.Exception.Message"
             
             }
             Finally{
@@ -2226,15 +2228,15 @@ Process{
             
             Try{
             
-                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$RECEIVEAS = Search-ReceiveAsPermission -Identity $recipientObj -PerformRemoval -Confirm:$False}
-                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$RECEIVEAS = Search-ReceiveAsPermission -Identity $recipientObj -PerformRemoval -WhatIf}
-                ElseIf($PerformRemoval){$RECEIVEAS = Search-ReceiveAsPermission -Identity $recipientObj -PerformRemoval}
-                Else{$RECEIVEAS = Search-ReceiveAsPermission -Identity $recipientObj}
+                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$RECEIVEAS = Search-ReceiveAsPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
+                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$RECEIVEAS = Search-ReceiveAsPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
+                ElseIf($PerformRemoval){$RECEIVEAS = Search-ReceiveAsPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
+                Else{$RECEIVEAS = Search-ReceiveAsPermission -Identity $recipientObj -ErrorAction Continue}
             
             }
             Catch{
             
-                Write-Error "Failed to call function Search-ReceiveAsPermission"
+                Write-Error "Failed to call function Search-ReceiveAsPermission: $_.Exception.Message"
             
             }
             Finally{
@@ -2257,15 +2259,15 @@ Process{
             
             Try{
             
-                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$PUBDEL = Search-PublicDelegatesPermission -Identity $recipientObj -PerformRemoval -Confirm:$False}
-                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$PUBDEL = Search-PublicDelegatesPermission -Identity $recipientObj -PerformRemoval -WhatIf}
-                ElseIf($PerformRemoval){$PUBDEL = Search-PublicDelegatesPermission -Identity $recipientObj -PerformRemoval}
-                Else{$PUBDEL = Search-PublicDelegatesPermission -Identity $recipientObj}
+                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$PUBDEL = Search-PublicDelegatesPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
+                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$PUBDEL = Search-PublicDelegatesPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
+                ElseIf($PerformRemoval){$PUBDEL = Search-PublicDelegatesPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
+                Else{$PUBDEL = Search-PublicDelegatesPermission -Identity $recipientObj -ErrorAction Continue}
             
             }
             Catch{
             
-                Write-Error "Failed to call function Search-ReceiveAsPermission"
+                Write-Error "Failed to call function Search-ReceiveAsPermission: $_.Exception.Message"
             
             }
             Finally{
@@ -2288,15 +2290,15 @@ Process{
 
             Try{
             
-                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$MBXFOL = Search-MailboxFolderPermission -Identity $recipientObj -PerformRemoval -Confirm:$False}
-                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$MBXFOL = Search-MailboxFolderPermission -Identity $recipientObj -PerformRemoval -WhatIf}
-                ElseIf($PerformRemoval){$MBXFOL = Search-MailboxFolderPermission -Identity $recipientObj -PerformRemoval}
-                Else{$MBXFOL = Search-MailboxFolderPermission -Identity $recipientObj}
+                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$MBXFOL = Search-MailboxFolderPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
+                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$MBXFOL = Search-MailboxFolderPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
+                ElseIf($PerformRemoval){$MBXFOL = Search-MailboxFolderPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
+                Else{$MBXFOL = Search-MailboxFolderPermission -Identity $recipientObj -ErrorAction Continue}
             
             }
             Catch{
             
-                Write-Error "Failed to call function Search-MailboxFolderPermission"
+                Write-Error "Failed to call function Search-MailboxFolderPermission: $_.Exception.Message"
             
             }
             Finally{
@@ -2319,15 +2321,15 @@ Process{
         
             Try{
             
-                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$PF = Search-PublicFolderPermission -Identity $recipientObj -PerformRemoval -Confirm:$False}
-                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$PF = Search-PublicFolderPermission -Identity $recipientObj -PerformRemoval -WhatIf}
-                ElseIf($PerformRemoval){$PF = Search-PublicFolderPermission -Identity $recipientObj -PerformRemoval}
-                Else{$PF = Search-PublicFolderPermission -Identity $recipientObj}
+                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$PF = Search-PublicFolderPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
+                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$PF = Search-PublicFolderPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
+                ElseIf($PerformRemoval){$PF = Search-PublicFolderPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
+                Else{$PF = Search-PublicFolderPermission -Identity $recipientObj -ErrorAction Continue}
             
             }
             Catch{
             
-                Write-Error "Failed to call function Search-PublicFolderPermission"
+                Write-Error "Failed to call function Search-PublicFolderPermission: $_.Exception.Message"
             
             }
             Finally{
@@ -2349,15 +2351,15 @@ Process{
         
             Try{
             
-                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$FORW = Search-RecipientForwarding -Identity $recipientObj}
-                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$FORW = Search-RecipientForwarding -Identity $recipientObj}
-                ElseIf($PerformRemoval){$FORW = Search-RecipientForwarding -Identity $recipientObj -PerformRemoval}
-                Else{$FORW = Search-RecipientForwarding -Identity $recipientObj}
+                If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$FORW = Search-RecipientForwarding -Identity $recipientObj -ErrorAction Continue}
+                ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$FORW = Search-RecipientForwarding -Identity $recipientObj -ErrorAction Continue}
+                ElseIf($PerformRemoval){$FORW = Search-RecipientForwarding -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
+                Else{$FORW = Search-RecipientForwarding -Identity $recipientObj -ErrorAction Continue}
             
             }
             Catch{
             
-                Write-Error "Failed to call function Search-RecipientForwarding"
+                Write-Error "Failed to call function Search-RecipientForwarding: $_.Exception.Message"
             
             }
             Finally{
@@ -2426,7 +2428,16 @@ Process{
 
 #Export to screen 
  #$report | Select 'Source Recipient','Permission Type',Recipient,'Script Action'
- 
+
+# Reapply Default ErrorActionPreference Value Also at the end if the Function Find-User fails
+if($oldActionPreference -ne $ErrorActionPreference){
+            
+    Set-Variable -Name ErrorActionPreference -Value $oldActionPreference -Scope Global
+    #$ErrorActionPreference = $ErrorActionPreferenceChanged
+    If($?){Write-Verbose "Function Find-User: Revert $ErrorActionPreference Back To: $oldActionPreference"}
+
+}
+
  
  If($EnableTranscript){
     
