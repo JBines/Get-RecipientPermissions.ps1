@@ -166,7 +166,7 @@ Find me on:
                          - BUG FIX:Skip Audit Folders in mailboxes "Non-system logon cannot access Audits folder."
  0.1.4 20190715 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow a loop break on mailboxes in dismounted DBs. Also move to Guid where Mailnick and SamAccountName do not match and other dodgy objects. 
  0.1.5 20190716 - JBINES - Added Suport for Modem Public Folders Exchange 2013/16/19 for Search-PublicFolderPermission. 
-                         - BUG FIX: When get-recepient returns an array higher than 1. Added Select-Object -First 1"
+                         - BUG FIX:When get-recepient returns an array higher than 1. Added Select-Object -First 1"
  0.1.6 20190722 - JBINES - Added Suport for non mail Enabled Search-PublicFolderPermissions. 
  0.1.7 20191230 - JBINES - Added New Recipient_SamAccountname to Function New-ArrayObject. 
                          - BUG FIX: Allowed script to continue on error for selected Functions. 
@@ -210,6 +210,12 @@ Begin{
     #BUG FIX - Changes Global Action Preference in Find-User if the not set to STOP
     $ErrorActionPreferenceChanged = $False
     $oldActionPreference = $ErrorActionPreference
+
+    if(($ErrorActionPreference -eq 'Stop') -or ($ErrorActionPreference -eq 'Suspend') -or ($ErrorActionPreference -eq 'Inquire')){
+    
+        Write-Warning "Please note your current ErrorActionPreference is set to $ErrorActionPreference and is not recommended for long running batches"
+
+    }
 
     
     #If Switch $EnableTranscript used start Console logging via Start-Transcript CMDlet
@@ -432,8 +438,17 @@ Begin{
                     
                     #Check Status of Linked Accounts
                     If($userObj.RecipientTypeDetails -eq "LinkedMailbox"){
-                    
-                        $userLinkedMasterAccount = (Get-User $userObj.DistinguishedName).linkedmasteraccount
+                        
+                        Try{
+                        
+                            $userLinkedMasterAccount = (Get-User $userObj.DistinguishedName).linkedmasteraccount
+
+                        }
+                        Catch{
+                        
+                            Write-Verbose "FUNCTION Find-User Failed LinkedMailbox Check: $($_.Exception.Message)"
+
+                        }
                         
                         #Check cross forest sid resolution is correct. 
                             If($userLinkedMasterAccount.length -gt 0){
@@ -460,7 +475,7 @@ Begin{
                                     
                                     Default {
                                     
-                                        Write-Error "FUNCTION Find-User SID Translatation Failed. Item is is listed by the Find-SIDObject as Neither Enabled or Disabled"
+                                        Write-Verbose "FUNCTION Find-User SID Translatation Failed. Item is is listed by the Find-SIDObject as Neither Enabled or Disabled"
                                     
                                     }
                                     
@@ -479,17 +494,22 @@ Begin{
                     #Add to arrary if User is Enabled or Disabled
                     if($userObj.DistinguishedName){
                         Write-Verbose "FUNCTION Find-User Object has DN of $($USERobj.DistinguishedName) Checking Enabled/Disabled Status"
-                                                
-                        $adUser = [adsi]"LDAP://$($USERobj.DistinguishedName)" 
-                        $uac=$adUser.psbase.invokeget("useraccountcontrol") 
-                        If($uac -band 0x2)  
-                        { Write-Verbose "DISABLED: $($USERobj.DistinguishedName)" ; $adUserEnabled = $False }
-                        Else
-                        { Write-Verbose "ENABLED: $($USERobj.DistinguishedName)";$adUserEnabled =$True }
                         
-                        #Set Var 
-                        $userEnabled = $adUserEnabled                       
+                        Try{                        
+                            $adUser = [adsi]"LDAP://$($USERobj.DistinguishedName)" 
+                            $uac=$adUser.psbase.invokeget("useraccountcontrol") 
+                            If($uac -band 0x2)  
+                            { Write-Verbose "DISABLED: $($USERobj.DistinguishedName)" ; $adUserEnabled = $False }
+                            Else
+                            { Write-Verbose "ENABLED: $($USERobj.DistinguishedName)";$adUserEnabled =$True }
                         
+                            #Set Var 
+                            $userEnabled = $adUserEnabled                       
+                        }
+                        Catch{
+                            
+                            Write-Verbose "FUNCTION Find-User Failed Enabled/Disabled Check: $($_.Exception.Message)"
+                        }
                     }
 
                 #Set Variables to Array Object
@@ -514,8 +534,6 @@ Begin{
     
     END {
     
-        $UserArray
-    
         #Reapply Default ErrorActionPreference Value
 
         if($ErrorActionPreferenceChanged -ne $False){
@@ -526,6 +544,7 @@ Begin{
 
         }
 
+        $UserArray
 
     }
 
@@ -2377,6 +2396,17 @@ Process{
         
         Else{Write-Verbose "Skipping Recipient Forwarding for Object $($($recipientObj).name) switch missing variable 'CMDlet_FORW'"}
 
+
+    # Reapply Default ErrorActionPreference Value Also at the end if the Function Find-User fails
+    if($oldActionPreference -ne $ErrorActionPreference){
+            
+        Set-Variable -Name ErrorActionPreference -Value $oldActionPreference -Scope Global
+        #$ErrorActionPreference = $ErrorActionPreferenceChanged
+        If($?){Write-Verbose "Variable ErrorActionPreference: Revert $ErrorActionPreference Back To: $oldActionPreference"}
+
+    }
+
+
  }
 
  END {
@@ -2428,15 +2458,6 @@ Process{
 
 #Export to screen 
  #$report | Select 'Source Recipient','Permission Type',Recipient,'Script Action'
-
-# Reapply Default ErrorActionPreference Value Also at the end if the Function Find-User fails
-if($oldActionPreference -ne $ErrorActionPreference){
-            
-    Set-Variable -Name ErrorActionPreference -Value $oldActionPreference -Scope Global
-    #$ErrorActionPreference = $ErrorActionPreferenceChanged
-    If($?){Write-Verbose "Function Find-User: Revert $ErrorActionPreference Back To: $oldActionPreference"}
-
-}
 
  
  If($EnableTranscript){
