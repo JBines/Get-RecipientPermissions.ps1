@@ -132,6 +132,8 @@ Large environments will take a significant amount of time to scan (hours/days). 
 
 Important: Do not run too many instances or against too many mailboxes at once. Doing so could cause performance issues, affecting users. The Author or Contributors are not responsible for issues or improper use, or a lack of planning and testing.
 
+Note: We recommend you run this script from the Exchange Management Shell for the best results.
+
 [AUTHOR]
  Joshua Bines, Consultant
 
@@ -165,11 +167,12 @@ Find me on:
  0.1.3 20190702 - JBINES - BUG FIX:CommonParameters for some exchange CMDlets are not working correctly instead we have had to change the global VAR $ErrorActionPreference
                          - BUG FIX:Skip Audit Folders in mailboxes "Non-system logon cannot access Audits folder."
  0.1.4 20190715 - JBINES - BUG FIX: Updated Search-MailboxFolderPermission to allow a loop break on mailboxes in dismounted DBs. Also move to Guid where Mailnick and SamAccountName do not match and other dodgy objects. 
- 0.1.5 20190716 - JBINES - Added Suport for Modem Public Folders Exchange 2013/16/19 for Search-PublicFolderPermission. 
+ 0.1.5 20190716 - JBINES - Added Suport for Exchange 2013 for Search-PublicFolderPermission. Still need to test Excahnge 2016 and 2019 but I belive it should work. 
                          - BUG FIX:When get-recepient returns an array higher than 1. Added Select-Object -First 1"
  0.1.6 20190722 - JBINES - Added Suport for non mail Enabled Search-PublicFolderPermissions. 
  0.1.7 20191230 - JBINES - Added New Recipient_SamAccountname to Function New-ArrayObject. 
                          - BUG FIX: Allowed script to continue on error for selected Functions. 
+                         - BUG FIX: To fix a bug fix (1.3) changing the $ErrorActionPreference was a silly idea. Fixed random issues I was seeing with the remote PS but inturn created other issues so a roll back was needed. Added note to make sure the script is run from the Exchange Shell
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
@@ -327,17 +330,18 @@ Begin{
      
      Begin {$userArray = @()
             
-        
+        <# Removed as the bug found for this code does not affect script when running from EMS
         if($ErrorActionPreference -ne "STOP"){
         
             #$ErrorActionPreferenceChanged = $ErrorActionPreference
             Set-Variable -Name ErrorActionPreferenceChanged -Value $ErrorActionPreference -Scope Global
 
             Write-Verbose "Set Global Variable ErrorActionPreferenceChanged: $ErrorActionPreferenceChanged"
-            Set-Variable -Name ErrorActionPreference -Value "STOP" -Scope Global
+            #Set-Variable -Name ErrorActionPreference -Value "STOP" -Scope Global
             If($?){Write-Verbose "FUNCTION Find-User: Changed $ErrorActionPreference to Stop"}
 
         }
+        #>
 
      }
         
@@ -535,14 +539,14 @@ Begin{
     END {
     
         #Reapply Default ErrorActionPreference Value
-
+        <#
         if($ErrorActionPreferenceChanged -ne $False){
             
             Set-Variable -Name ErrorActionPreference -Value $ErrorActionPreferenceChanged -Scope Global
             #$ErrorActionPreference = $ErrorActionPreferenceChanged
             If($?){Write-Verbose "Function Find-User: Revert $ErrorActionPreference Back To: $ErrorActionPreferenceChanged"}
 
-        }
+        }#>
 
         $UserArray
 
@@ -2153,7 +2157,7 @@ Process{
         if ($CMDlet_FMP){
             
             Try{
-            
+
                 If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$FMP = Search-FullMailboxPermission $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
                 ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$FMP = Search-FullMailboxPermission $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
                 ElseIf($PerformRemoval){$FMP = Search-FullMailboxPermission $recipientObj -PerformRemoval -ErrorAction Continue}
@@ -2184,7 +2188,7 @@ Process{
         if($CMDlet_SOBP){
         
             Try{
-            
+
                 If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$SOBP = Search-SendOnBehalfPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
                 ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$SOBP = Search-SendOnBehalfPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
                 ElseIf($PerformRemoval){$SOBP = Search-SendOnBehalfPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
@@ -2215,7 +2219,7 @@ Process{
         if($CMDlet_SENDAS){
                         
             Try{
-            
+
                 If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$SENDAS = Search-SendAsPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
                 ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$SENDAS = Search-SendAsPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
                 ElseIf($PerformRemoval){$SENDAS = Search-SendAsPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
@@ -2246,7 +2250,7 @@ Process{
         if($CMDlet_RECEIVEAS){
             
             Try{
-            
+
                 If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$RECEIVEAS = Search-ReceiveAsPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
                 ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$RECEIVEAS = Search-ReceiveAsPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
                 ElseIf($PerformRemoval){$RECEIVEAS = Search-ReceiveAsPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
@@ -2277,7 +2281,7 @@ Process{
         if($CMDlet_PUBDEL){
             
             Try{
-            
+
                 If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$PUBDEL = Search-PublicDelegatesPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
                 ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$PUBDEL = Search-PublicDelegatesPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
                 ElseIf($PerformRemoval){$PUBDEL = Search-PublicDelegatesPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
@@ -2308,7 +2312,7 @@ Process{
         if($CMDlet_MBXFOL){
 
             Try{
-            
+
                 If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$MBXFOL = Search-MailboxFolderPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
                 ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$MBXFOL = Search-MailboxFolderPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
                 ElseIf($PerformRemoval){$MBXFOL = Search-MailboxFolderPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
@@ -2339,7 +2343,7 @@ Process{
         if ($CMDlet_PF){
         
             Try{
-            
+
                 If(($PerformRemoval)-and($ConfirmPreference -eq 'None')){$PF = Search-PublicFolderPermission -Identity $recipientObj -PerformRemoval -Confirm:$False -ErrorAction Continue}
                 ElseIf(($PerformRemoval)-and($WhatIfPreference -eq $True)){$PF = Search-PublicFolderPermission -Identity $recipientObj -PerformRemoval -WhatIf -ErrorAction Continue}
                 ElseIf($PerformRemoval){$PF = Search-PublicFolderPermission -Identity $recipientObj -PerformRemoval -ErrorAction Continue}
