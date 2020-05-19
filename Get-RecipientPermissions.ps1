@@ -173,6 +173,7 @@ Find me on:
  0.1.7 20191230 - JBINES - Added New Recipient_SamAccountname to Function New-ArrayObject. 
                          - BUG FIX: Allowed script to continue on error for selected Functions. 
                          - BUG FIX: To fix a bug fix (1.3) changing the $ErrorActionPreference was a silly idea. Fixed random issues I was seeing with the remote PS but inturn created other issues so a roll back was needed. Added note to make sure the script is run from the Exchange Shell
+ 0.1.8 20200519 - JBINES - BUG FIX: Function Search-RecipientForwarding was missing the -PerformRemoval Switch which was causing an error at runtime. Thx astavitsky for logging the issue. https://github.com/JBines/Get-RecipientPermissions.ps1/issues/3
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
@@ -1843,8 +1844,11 @@ This Function searches for Recipient Forwarding Permissions and Reports. The Per
  Param (
  
 [Parameter(Mandatory = $True, ValueFromPipeline = $True)]
-$Identity
- 
+$Identity,
+
+[Parameter(Mandatory = $False)]
+[switch]$PerformRemoval
+
  )
  
  Begin {
