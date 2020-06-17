@@ -177,7 +177,9 @@ Find me on:
 
 [TO DO LIST / PRIORITY]
  HIGH - Add XML backup of removed permissions
- HIGH - Exchange ActiveSync clients 
+ HIGH - Exchange ActiveSync clients
+ HIGH - Add Support for EXO
+ HIGH - Add Support Remote PS Sessions
  MED - Flag duplicates from the Find-User
  MED - Write Log for troubleshooting (Use Verbose for now with Transcript)
  MED - Expand DLs for with a full user list
