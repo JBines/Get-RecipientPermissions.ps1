@@ -128,11 +128,11 @@ In this example, the mandatory parameters have been provided and the ACTION(s) -
 Exchange Hybrid Deployment Considerations - https://technet.microsoft.com/library/jj200581(v=exchg.150).aspx
 
 .NOTES
+IMPORTANT! We recommend you run this script from the Exchange Management Shell for the best results. 
+
 Large environments will take a significant amount of time to scan (hours/days). You can reduce the run time by running the script in batches or multiple instances
 
 Important: Do not run too many instances or against too many mailboxes at once. Doing so could cause performance issues, affecting users. The Author or Contributors are not responsible for issues or improper use, or a lack of planning and testing.
-
-Note: We recommend you run this script from the Exchange Management Shell for the best results.
 
 [AUTHOR]
  Joshua Bines, Consultant
